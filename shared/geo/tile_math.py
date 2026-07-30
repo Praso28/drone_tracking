@@ -2,6 +2,7 @@
 Pure geospatial math utilities for GPS-Denied visual navigation.
 Provides conversion functions between lat/lon, tile coordinates (XYZ),
 pixel offsets, Ground Sampling Distance (GSD), and Haversine distance calculations.
+Includes correct sign inversion for image-to-camera coordinate transformation.
 """
 
 import math
@@ -42,10 +43,14 @@ def pixel_to_latlon(
     dy_px: float,
     gsd_m_per_px: float
 ) -> Tuple[float, float]:
-    """Converts pixel offsets (dx, dy) relative to an anchor coordinate into new lat/lon."""
+    """
+    Converts pixel offsets (dx, dy) relative to an anchor coordinate into new lat/lon.
+    Note: Live frame feature shift +X (right) relative to patch means camera is situated to West (-X).
+    Live frame feature shift +Y (down) relative to patch means camera is situated to North (-Y).
+    """
     earth_radius_m = 6378137.0
-    dx_m = dx_px * gsd_m_per_px
-    dy_m = -dy_px * gsd_m_per_px  # Image Y increases downward, North increases upward
+    dx_m = -dx_px * gsd_m_per_px
+    dy_m = -dy_px * gsd_m_per_px
 
     dlat = (dy_m / earth_radius_m) * (180.0 / math.pi)
     dlon = (dx_m / (earth_radius_m * math.cos(math.radians(anchor_lat)))) * (180.0 / math.pi)

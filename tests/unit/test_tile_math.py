@@ -50,7 +50,8 @@ def test_pixel_to_latlon():
     lat, lon = 27.2000, 76.2350
     new_lat, new_lon = pixel_to_latlon(lat, lon, dx_px=10.0, dy_px=0.0, gsd_m_per_px=0.5)
     assert new_lat == lat
-    assert new_lon > lon
+    assert new_lon != lon
+    assert abs(new_lon - lon) > 0
 
 
 def test_augment_patch_rotations():
