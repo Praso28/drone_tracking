@@ -1,7 +1,7 @@
 """
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
 Executes Intelligent Multi-Phase Navigation State Machine:
-  - Phase 1: UNANCHORED_ACQUISITION (Automatic Map Anchor & Start-Pose Acquisition)
+  - Phase 1: UNANCHORED_ACQUISITION (Cold-Start Map Anchoring from Takeoff Pose)
   - Phase 2: HIGH_CONFIDENCE_TRACKING (Visual Primary Navigation & IMU Velocity Reset)
   - Phase 3: IMU_DEAD_RECKONING (Sensor Propagation during Visual Dropout)
   - Phase 4: GLOBAL_REFIX (Trajectory Re-Anchoring upon High-Confidence Match)
@@ -38,7 +38,7 @@ class GPSDeniedPipeline:
 
         edge_cfg = self.cfg.get("edge", {})
         map_cfg = self.cfg.get("map", {})
-        start_pose = edge_cfg.get("start_pose", {"latitude": 29.760960, "longitude": 115.974797})
+        self.start_pose = edge_cfg.get("start_pose", {"latitude": 29.760960, "longitude": 115.974797})
 
         texture_path = map_cfg.get("satellite_texture_path", "data/satellite01.jpg")
         bbox = tuple(map_cfg.get("bbox", [29.702283, 115.970635, 29.774065, 115.996851]))
@@ -52,7 +52,7 @@ class GPSDeniedPipeline:
             index_path=self.cfg.get("retrieval", {}).get("index_path", "data/ajabgarh_ivfpq.index"),
             db_path=self.cfg.get("retrieval", {}).get("db_path", "data/georef.sqlite")
         )
-        self.ekf = SimpleEKFFusion(start_pose["latitude"], start_pose["longitude"])
+        self.ekf = SimpleEKFFusion(self.start_pose["latitude"], self.start_pose["longitude"])
         self.smoother = PoseSmoother(max_distance_m=3000.0)
         self.phase_controller = NavigationPhaseController(anchor_inliers_thresh=100, tracking_min_inliers=30)
         self.mavlink = MAVLinkBridge(connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"))
@@ -88,12 +88,14 @@ class GPSDeniedPipeline:
         if len(live_feats["keypoints"]) == 0:
             return {"status": "warning", "message": "No keypoints detected"}
 
-        # 3. Intelligent Map Retrieval (Global Search during UNANCHORED, Spatial Search when ANCHORED)
+        # 3. Intelligent Map Retrieval (Spatial Prior Search from active EKF or initial Takeoff Pose)
         if self.phase_controller.anchored:
             spatial_prior = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
-            candidates = self.retriever.search(np.mean(live_feats["descriptors"], axis=0), spatial_prior=spatial_prior, radius_km=3.0)
         else:
-            candidates = self.retriever.search(np.mean(live_feats["descriptors"], axis=0), spatial_prior=None)
+            spatial_prior = {"latitude": self.start_pose["latitude"], "longitude": self.start_pose["longitude"]}
+
+        query_vec = np.mean(live_feats["descriptors"], axis=0)
+        candidates = self.retriever.search(query_vec, spatial_prior=spatial_prior, radius_km=8.0)
 
         top_cand = candidates[0] if candidates else {}
         cand_lat = top_cand.get("center_lat", self.ekf.lat)
