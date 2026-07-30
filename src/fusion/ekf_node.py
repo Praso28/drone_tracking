@@ -11,7 +11,7 @@ from shared.geo.tile_math import haversine_distance, pixel_to_latlon
 class PoseSmoother:
     """Rolling median filter for position outlier rejection with cold-start warmup."""
 
-    def __init__(self, window_size: int = 5, max_distance_m: float = 25.0, warmup_fixes: int = 3):
+    def __init__(self, window_size: int = 5, max_distance_m: float = 100.0, warmup_fixes: int = 5):
         self.window_size = window_size
         self.max_distance_m = max_distance_m
         self.warmup_fixes = warmup_fixes
@@ -55,6 +55,7 @@ class SimpleEKFFusion:
         self.vx = 0.0
         self.vy = 0.0
         self.std_m = std_m
+        self.initialized = False
 
     def predict_imu(
         self,
@@ -93,9 +94,15 @@ class SimpleEKFFusion:
 
     def update_visual_fix(self, fix: Dict[str, float]) -> Dict[str, float]:
         """Updates internal Kalman state estimate using absolute visual fix."""
-        alpha = 0.7  # Kalman Gain
-        self.lat = (1 - alpha) * self.lat + alpha * fix["latitude"]
-        self.lon = (1 - alpha) * self.lon + alpha * fix["longitude"]
+        if not self.initialized:
+            # Snap instantly to first visual position fix on cold-start
+            self.lat = fix["latitude"]
+            self.lon = fix["longitude"]
+            self.initialized = True
+        else:
+            alpha = 0.8  # Fast Kalman Gain
+            self.lat = (1 - alpha) * self.lat + alpha * fix["latitude"]
+            self.lon = (1 - alpha) * self.lon + alpha * fix["longitude"]
 
         # Reset velocity drift on visual update
         self.vx *= 0.5
