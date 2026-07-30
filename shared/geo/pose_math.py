@@ -1,6 +1,7 @@
 """
 Homography-to-GeoPose calculations, 4-rotation patch augmentation,
 multi-candidate RANSAC voting, and metric evaluation routines.
+Includes safety bounds clamping to prevent scale explosions.
 """
 
 import math
@@ -27,6 +28,7 @@ def homography_to_translation(
     """
     Computes (dx_px, dy_px, yaw_deg) from a 2x3 Affine matrix or 3x3 Homography matrix M.
     Maps query center to reference patch coordinate system.
+    Includes safety clamping to prevent scale explosions.
     """
     if M is None:
         return 0.0, 0.0, 0.0
@@ -34,23 +36,21 @@ def homography_to_translation(
     cx, cy = patch_center_px
 
     if M.shape == (2, 3):
-        # 2x3 Affine Similarity Transformation Matrix [ [s*cos(theta), -s*sin(theta), tx], [s*sin(theta), s*cos(theta), ty] ]
         tx = float(M[0, 2])
         ty = float(M[1, 2])
         yaw_rad = math.atan2(M[1, 0], M[0, 0])
         yaw_deg = math.degrees(yaw_rad)
 
-        # Center displacement offset in pixels
         dx_px = tx + M[0, 0] * cx + M[0, 1] * cy - cx
         dy_px = ty + M[1, 0] * cx + M[1, 1] * cy - cy
-        return float(dx_px), float(dy_px), float(yaw_deg)
 
     elif M.shape == (3, 3):
-        # Fallback 3x3 Homography projection
         query_center = np.array([cx, cy, 1.0], dtype=np.float64)
         ref_proj = M @ query_center
-        if abs(ref_proj[2]) > 1e-8:
+        if abs(ref_proj[2]) > 1e-4:
             ref_proj /= ref_proj[2]
+        else:
+            ref_proj = query_center
 
         dx_px = ref_proj[0] - cx
         dy_px = ref_proj[1] - cy
@@ -60,9 +60,14 @@ def homography_to_translation(
         R = u @ vt
         yaw_rad = math.atan2(R[1, 0], R[0, 0])
         yaw_deg = math.degrees(yaw_rad)
-        return float(dx_px), float(dy_px), float(yaw_deg)
+    else:
+        dx_px, dy_px, yaw_deg = 0.0, 0.0, 0.0
 
-    return 0.0, 0.0, 0.0
+    # Safety clamping: Max offset allowed is +/- 500 pixels (~139 meters)
+    dx_px = max(-500.0, min(float(dx_px), 500.0))
+    dy_px = max(-500.0, min(float(dy_px), 500.0))
+
+    return float(dx_px), float(dy_px), float(yaw_deg)
 
 
 def ransac_pose_vote(
