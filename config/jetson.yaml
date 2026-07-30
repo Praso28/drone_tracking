@@ -2,8 +2,8 @@ edge:
   device: "cuda"
   fp16: true
   start_pose:
-    latitude: 29.707128
-    longitude: 115.976814
+    latitude: 29.760960
+    longitude: 115.974797
     altitude_m: 405.0
     heading_deg: 163.8
 

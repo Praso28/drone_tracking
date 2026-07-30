@@ -3,6 +3,7 @@ UAV-VisLoc Professional Telemetry & Real Video Streamer.
 Reads real high-resolution drone photographs and actual flight telemetry (center Lat/Lon,
 flying height, roll/pitch/yaw angles) from the UAV-VisLoc dataset and streams packets
 over ZMQ PUB socket to the Jetson Orin Nano edge node at 30 Hz.
+Includes startup delay parameter to allow seamless synchronization with Jetson control loop launch.
 """
 
 import os
@@ -27,6 +28,7 @@ def run_uav_visloc_streamer(
     dataset_root: str = "/mnt/c/Users/hs901/Downloads/UAV_VisLoc_dataset",
     port: int = 5555,
     fps: float = 30.0,
+    startup_delay: float = 3.0,
     loop: bool = True
 ):
     """Publishes real drone video frames and authentic flight telemetry over ZMQ PUB socket."""
@@ -63,6 +65,10 @@ def run_uav_visloc_streamer(
     socket = context.socket(zmq.PUB)
     socket.bind(f"tcp://0.0.0.0:{port}")
     logger.info(f"Started Professional UAV-VisLoc Telemetry Streamer on tcp://0.0.0.0:{port}")
+
+    if startup_delay > 0:
+        logger.info(f"Pausing {startup_delay}s for Jetson Edge Node connection launch...")
+        time.sleep(startup_delay)
 
     frame_id = 0
     record_idx = 0
@@ -151,6 +157,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset-root", type=str, default="/mnt/c/Users/hs901/Downloads/UAV_VisLoc_dataset")
     parser.add_argument("--port", type=int, default=5555, help="ZMQ publishing port")
     parser.add_argument("--fps", type=float, default=30.0, help="Stream FPS rate")
+    parser.add_argument("--startup-delay", type=float, default=3.0, help="Startup delay seconds before publishing")
     args = parser.parse_args()
 
-    run_uav_visloc_streamer(sequence_id=args.sequence, dataset_root=args.dataset_root, port=args.port, fps=args.fps)
+    run_uav_visloc_streamer(sequence_id=args.sequence, dataset_root=args.dataset_root, port=args.port, fps=args.fps, startup_delay=args.startup_delay)
