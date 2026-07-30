@@ -1,7 +1,7 @@
 """
 Synthetic frame camera stream interface for simulation host & edge testing.
 Generates realistic drone camera crops directly from high-resolution satellite map textures
-(data/ajabgarh_sat.png) mapped to real WGS84 coordinates [min_lat, min_lon, max_lat, max_lon].
+(data/satellite01.jpg) mapped to real WGS84 coordinates [min_lat, min_lon, max_lat, max_lon].
 Memory-optimized using lazy image loading & memory-mapping for low RAM footprint (<50MB).
 """
 
@@ -18,8 +18,8 @@ class SimCamera:
 
     def __init__(
         self,
-        texture_path: str = "data/ajabgarh_sat.png",
-        bbox: Tuple[float, float, float, float] = (27.1800, 76.2100, 27.2200, 76.2600),
+        texture_path: str = "data/satellite01.jpg",
+        bbox: Tuple[float, float, float, float] = (29.702283, 115.970635, 29.774065, 115.996851),
         width: int = 640,
         height: int = 480,
         fps: int = 30
@@ -57,9 +57,11 @@ class SimCamera:
         """Extracts camera crop from satellite map at specific WGS84 pose."""
         center_x, center_y = self.latlon_to_pixel(lat, lon)
 
+        # Scale GSD field of view dynamically based on altitude
         fov_base_px = 512.0
         crop_size = int(fov_base_px * (alt_m / 100.0))
-        crop_size = max(128, min(crop_size, 1024))
+        max_allowed_crop = min(self.map_w, self.map_h) - 100
+        crop_size = max(128, min(crop_size, max_allowed_crop))
 
         left = int(clamp(center_x - crop_size / 2, 0, self.map_w - crop_size))
         top = int(clamp(center_y - crop_size / 2, 0, self.map_h - crop_size))
