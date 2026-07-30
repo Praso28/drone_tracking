@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+.nox/
+.tox/
+
+# Environment
+.env
+.venv
+venv/
+ENV/
+
+# Large Datasets, Models & Binary Artifacts (Do not track in git)
+data/*.png
+data/*.jpg
+data/*.JPG
+data/*.tif
+data/*.tiff
+data/*.npy
+data/*.index
+data/*.sqlite
+data/tiles/
+data/engines/*.onnx
+data/engines/*.engine
+results/
+*.png
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gazeebo_drone"
+version = "0.1.0"
+description = "GPS-Denied Visual Navigation System (Edge-Only Architecture + PC Ground Host)"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+    "pyyaml>=5.4.1",
+    "pillow>=8.0.0",
+    "requests>=2.25.0",
+]
+
+[project.optional-dependencies]
+jetson = [
+    "opencv-python>=4.5.0",
+    "pymavlink>=2.4.0",
+    "faiss-cpu>=1.7.0",
+]
+ground = [
+    "opencv-python>=4.5.0",
+    "pymavlink>=2.4.0",
+    "faiss-cpu>=1.7.0",
+    "torch>=1.10.0",
+    "torchvision>=0.11.0",
+    "mavsdk>=1.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "ruff>=0.1.0",
+    "mypy>=0.910",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"

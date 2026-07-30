@@ -1,0 +1,100 @@
+"""
+Homography-to-GeoPose calculations, 4-rotation patch augmentation,
+multi-candidate RANSAC voting, and metric evaluation routines.
+"""
+
+import math
+import numpy as np
+from typing import Tuple, List, Dict, Any
+from .tile_math import pixel_to_latlon, haversine_distance
+
+
+def augment_patch_rotations(patch_img: np.ndarray) -> List[Tuple[int, np.ndarray]]:
+    """Generates 4 rotated versions of a patch image: 0°, 90°, 180°, 270°."""
+    rotations = [
+        (0, patch_img),
+        (90, np.rot90(patch_img, k=1)),
+        (180, np.rot90(patch_img, k=2)),
+        (270, np.rot90(patch_img, k=3)),
+    ]
+    return rotations
+
+
+def homography_to_translation(
+    H: np.ndarray,
+    patch_center_px: Tuple[float, float]
+) -> Tuple[float, float, float]:
+    """
+    Computes (dx_px, dy_px, yaw_deg) from a 3x3 homography matrix H.
+    Maps query center to reference patch coordinate system.
+    """
+    if H is None or H.shape != (3, 3):
+        return 0.0, 0.0, 0.0
+
+    cx, cy = patch_center_px
+    query_center = np.array([cx, cy, 1.0], dtype=np.float64)
+    ref_proj = H @ query_center
+    if abs(ref_proj[2]) > 1e-8:
+        ref_proj /= ref_proj[2]
+
+    dx_px = ref_proj[0] - cx
+    dy_px = ref_proj[1] - cy
+
+    # Extract yaw rotation angle from 2x2 homography submatrix
+    rotation_submatrix = H[:2, :2]
+    u, _, vt = np.linalg.svd(rotation_submatrix)
+    R = u @ vt
+    yaw_rad = math.atan2(R[1, 0], R[0, 0])
+    yaw_deg = math.degrees(yaw_rad)
+
+    return float(dx_px), float(dy_px), float(yaw_deg)
+
+
+def ransac_pose_vote(
+    candidates: List[Dict[str, Any]],
+    inlier_threshold: int = 15
+) -> Dict[str, Any]:
+    """
+    Selects the best visual matching candidate using RANSAC inlier count
+    and rotation consensus voting.
+    """
+    if not candidates:
+        return {"valid": False, "reason": "No candidates provided"}
+
+    # Sort candidates by inlier count descending
+    sorted_candidates = sorted(candidates, key=lambda c: c.get("inliers", 0), reverse=True)
+    best = sorted_candidates[0]
+
+    if best.get("inliers", 0) < inlier_threshold:
+        return {
+            "valid": False,
+            "reason": f"Insufficient inliers ({best.get('inliers', 0)} < {inlier_threshold})",
+            "best_candidate": best
+        }
+
+    return {
+        "valid": True,
+        "best_candidate": best,
+        "inliers": best.get("inliers", 0),
+        "patch_id": best.get("patch_id"),
+        "dx_px": best.get("dx_px", 0.0),
+        "dy_px": best.get("dy_px", 0.0),
+        "yaw_deg": best.get("yaw_deg", 0.0),
+    }
+
+
+def compute_geopose(
+    ref_lat: float,
+    ref_lon: float,
+    dx_px: float,
+    dy_px: float,
+    yaw_deg: float,
+    gsd_m_per_px: float
+) -> Dict[str, float]:
+    """Calculates final latitude, longitude, heading from reference coordinate and offsets."""
+    lat, lon = pixel_to_latlon(ref_lat, ref_lon, dx_px, dy_px, gsd_m_per_px)
+    return {
+        "latitude": lat,
+        "longitude": lon,
+        "heading_deg": (yaw_deg + 360.0) % 360.0,
+    }

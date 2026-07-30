@@ -1,0 +1,27 @@
+# Ground Station & Simulation Configuration (System 2 - PC Host)
+sim:
+  mode: "simulation"
+  host_ip: "10.1.1.13"
+  zmq_port: 5555
+  stream_fps: 30
+
+map:
+  satellite_texture_path: "data/ajabgarh_sat.png"
+  db_path: "data/georef.sqlite"
+  descriptors_path: "data/vlad_descriptors.npy"
+  tile_dir: "data/tiles"
+  zoom_level: 18
+  patch_size_px: 256
+  rotations: [0, 90, 180, 270]
+  bbox: [27.1800, 76.2100, 27.2200, 76.2600]
+
+indexer:
+  index_type: "IVFPQ"
+  descriptor_dim: 256
+  nlist: 100
+  m: 16
+  nbits: 8
+
+camera:
+  fov_deg: 75.0
+  resolution: [640, 480]

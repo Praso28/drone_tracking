@@ -1,0 +1,13 @@
+import sqlite3
+conn = sqlite3.connect("data/georef.sqlite")
+c = conn.cursor()
+c.execute("SELECT MIN(center_lat), MAX(center_lat), MIN(center_lon), MAX(center_lon), MIN(gsd_m_per_px), MAX(gsd_m_per_px), COUNT(patch_id) FROM patches")
+row = c.fetchone()
+print("Min Lat:", row[0])
+print("Max Lat:", row[1])
+print("Min Lon:", row[2])
+print("Max Lon:", row[3])
+print("Min GSD:", row[4])
+print("Max GSD:", row[5])
+print("Total Patches:", row[6])
+conn.close()

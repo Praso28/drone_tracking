@@ -1,0 +1,242 @@
+UAV-VisLoc: A Large-scale Dataset for UAV
+Visual Localization
+Wenjia Xu1 *, Yaxuan Yao1 *, Jiaqi Cao1 *, Zhiwei Wei2, Chunbo Liu2,
+Jiuniu Wang3, and Mugen Peng1
+arXiv:2405.11936v1  [cs.CV]  20 May 2024
+1State Key Laboratory of Networking and Switching Technology,
+Beijing University of Posts and Telecommunications
+2Aerospace Information Research Institute, Chinese Academy of Sciences
+3City University of Hong Kong
+Abstract
+The application of unmanned aerial vehicles (UAV) has been widely extended recently. It is crucial
+to ensure accurate latitude and longitude coordinates for UAVs, especially when the global navigation
+satellite systems (GNSS) are disrupted and unreliable. Existing visual localization methods achieve
+autonomous visual localization without error accumulation by matching the ground-down view image of
+UAV with the ortho satellite maps. However, collecting UAV ground-down view images across diverse
+locations is costly, leading to a scarcity of large-scale datasets for real-world scenarios. Existing datasets
+for UAV visual localization are often limited to small geographic areas or are focused only on urban
+regions with distinct textures. To address this, we define the UAV visual localization task by determining
+the UAV’s real position coordinates on a large-scale satellite map based on the captured ground-down
+view. In this paper, we present a large-scale dataset, UAV-VisLoc, to facilitate the UAV visual localization
+task. This dataset comprises images from diverse drones across 11 locations in China, capturing a range
+of topographical features. The dataset features images from fixed-wing drones and multi-terrain drones,
+captured at different altitudes and orientations. Our dataset includes 6,742 drone images and 11 satellite
+maps, with metadata such as latitude, longitude, altitude, and capture date. Our dataset is tailored to
+support both the training and testing of models by providing a diverse and extensive data. Our dataset
+is released at https://github.com/IntelliSensing/UAV-VisLoc
+* Equal contribution
+Corresponding author: Wenjia Xu (xuwenjia@bupt.edu.cn)
+Index Terms
+2
+Unmanned Aerial Vehicle, Visual Localization, UAV-VisLoc Dataset
+I. INTRODUCTION
+The utilization of UAVs has expanded significantly across various fields recently, such as agriculture
+development, environment monitoring, and ground surveillance. Acquiring the UAV’s precise location
+(i.e., accurate latitude and longitude coordinates) is crucial for the downstream tasks, especially under
+conditions where Global Navigation Satellite Systems (GNSS) are interrupted or unavailable. Meanwhile,
+with the development of remote sensing technology, we can obtain high-resolution satellite maps covering
+almost everywhere on Earth, with each pixel annotated with precise coordinates. Therefore, matching
+the ground-down view captured by drone images with the corresponding ortho-satellite imagery allows
+accurate and quick UAV localization with no error accumulation [1], [2], [3].
+The UAV visual localization task, which locates the UAV based on the captured ground-down view,
+has gained much attention in recent years. ASIFT [4] obtains UAV coordinates by matching oblique UAV
+down-views with remote sensing images. In addition, LCM [5] and GLVL [3] obtain UAV coordinates
+by matching orthorectified UAV down-views with remote sensing images. Wang et al. [4] proposed
+ASIFT as an affine scale-invariant feature transform-based method that can register UAV oblique images
+at a subpixel level. Ding et al. [5] proposed a cross-view matching method LCM based on location
+classification, which improved accuracy by simplifying the retrieval problem into a classification problem
+and considering the effect of feature vector size. Li et al. [3] proposed a two-stage visual localization
+method GLVL, which combines a large-scale retrieval module for finding similar regions and a fine
+grained matching module to locate UAV coordinates precisely.
+The dataset benchmarks are necessary when evaluating previous methods with a uniform standard,
+which is shown in TABLE I. The CVUSA [6] defined a ground-satellite matching task, which provides
+a dataset involving street-view images and satellite-view images captured from distinct regions across
+the United States. VIGOR [7] redefined the problem by breaking the one-to-one retrieval setup of
+the dataset, so that there are often multiple reference satellite map blocks covering a single query
+location. The University-1652 [8] introduced drone-view to cross-view geo-localization, extended the
+visual localization task as ground-drone-satellite cross-view matching, and provided a three-view dataset
+from 1,652 architectures of 72 universities. Furthermore, the SUE-200 [9] provided drone images from
+multi-scene at multi-height for each satellite map. Recently, the DenseUAV [10] focused on the problem
+of UAV self-localization, considering both prominent features and the spatial distribution of objects in
+images.
+TABLE I: A SUMMARY OF RELATED UAV VISUAL LOCALIZATION DATASETS.
+3
+Dataset
+Image Size
+Region
+Platform
+CVUSA [6]
+VIGOR [7]
+University-1652 [8]
+SUE-200 [9]
+DenseUAV [10]
+71 k
+144 k
+50.2 k
+6.1 k
+20.3 k
+United States
+Manhattan, San Francisco, Chicago, and Seattle
+1,652 architectures of 72 universities
+a university in Shanghai, China
+14 universities in Zhejiang, China
+Ground-Satellite
+Ground-Satellite
+Ground-Drone-Satellite
+Drone-Satellite
+Drone-Satellite
+However, the existing Cross-View Image Geo-localization datasets can not meet the practical require
+ments and suffer from the following shortcomings. (i) Simple Task. CVUSA [6] and VIGOR [7] was
+initially proposed to solve the ground-to-aerial matching problem. The DenseUAV [10] simply considers
+the visual localization task as a retrieval task. This dataset uses blocks of satellite maps that are based
+solely on the coordinates of the query images. It is different from the real scenario, which locates the
+latitude and longitude of a UAV on a satellite map. (ii) Low Altitude. Most existing drone images of
+realistic scenes are of urban areas captured by multi-rotor drones, which often fly at a low altitude, e.g.,
+University-1652 [8] and SUE-200 [9] use sampling altitudes of no more than 300 meters. We can not
+obtain a general visual localization model only with the data collected from the low altitude.
+(iii) Single Scene. University-1652 [8], SUE-200 [9] and DenseUAV [10] drone images are only
+of texture-rich campuses or urban areas with a single location and a single geographic feature. The
+application scenarios are limited for the models trained with the single scene dataset.
+In summary, we unify the definition of visual localization methods for UAVs in real scenarios. We
+propose a dataset as a benchmark for the visual localization task. The dataset collecting process is shown
+in Fig. 1. The task is defined as a UAV obtaining the coordinates of its current location by matching the
+down image with the satellite map when losing its GNSS coordinates. Thus, we collect a sequence of
+images on the UAV flight track in our dataset. And we further collect an orthorectified remote sensing
+map covering a large geographic area where every pixel is labelled with coordinates. The contributions
+of this dataset are as follows:
+• Fixed-wing drone images. Fixed-wing UAVs have endurance and high flight altitude and are now
+widely used in surveying and mapping, agriculture, and reconnaissance industries. Therefore, in
+addition to multi-rotor UAVs, our dataset is supplemented with drone images captured at higher
+altitudes by fixed-wing UAVs to accommodate multi-domain model training and testing.
+• Multi-terrain drone images. Our dataset contains drone images of various geomorphological texture
+4
+Fig. 1. The dataset collecting process. The red point in the coordinate system represents the projection of the drone’s current
+location on the ground, i.e., the center point of the image taken by the drone. The yellow points represent the satellite map
+boundaries of the entire flight range.
+features, such as villages, towns, farms, cities, rivers, hills, etc., covering most of China.
+• Multi-height and multi-heading-angle drone images. Our dataset contains drone images at dif
+ferent altitudes, with both low-altitude urban scenes and high-altitude field scenes. Our dataset also
+contains flight heading angle information, which benefits subsequent related studies.
+• Large-scale visual localization dataset. This dataset provides a sufficient amount of data to support
+the training and testing of models. In detail, it has 6,742 drone images and 11 satellite maps.
+II. DATA COLLECTION
+A. Drone Images
+For the UAV visual localization task in real scenario, we collected drone images from different locations
+within China, such as Jiangsu Province, Taihu Lake Coast, Yangtze River Basin, Donghuayuan Town,
+Yunnan Province, and Gansu Province. The raw drone image data are characterized as follows. (i) The
+drone images cover a wide range of complex topographical and geomorphological features, such as
+villages, towns, farms, cities, rivers, hills, and forests. (ii) We capture drone images at different heights,
+5
+Fig. 2. An example of drone images and satellite map. The red dots in satellite map represent the center points of drone images.
+The satellite map encompasses various terrains such as cities, towns, farms, and rivers. We also show the drone images of these
+terrains.
+from 400 meters to 2,000 meters, with different heading angles. We use both multi-rotor and fixed-wing
+drones. (iii) The drone images we captured contain two seasons, i.e., summer and autumn.
+B. Satellite Maps
+Satellite Map Sources. Satellite maps are all taken from Google Earth, with a spatial resolution of
+0.3 meters.
+Download and Crop. A satellite map covering all ranges captured by the lower view of the UAV is
+downloaded separately for each UAV image of each flight. The data can be further preprocessed according
+to different training or testing tasks.
+III. DATASET CONSTRUCTION
+Our dataset contains 6,742 drone images and 11 satellite maps. As presented in TABLE II, we provide
+the attributes of drone images, such as latitude and longitude of the center point, shooting height, shooting
+date, and heading angle (Phi). We also provide GPS latitude and longitude ranges for 11 satellite maps.
+As shown in Fig. 2, each satellite map downloaded from Google Maps contains all UAV images captured
+by a single drone flight, which may encompass various terrains such as cities, towns, farms, and rivers.
+TABLE II: IMAGE ATTRIBUTE COMPOSITION FOR THE UAV-VisLoc DATASET.
+6
+Drone Image
+Site
+Pixel
+Date
+Phi * Height
+Satellite Map
+Pixel
+Date
+Coordinates Range **
+Changjiang-20
+3976×2652 2018-09 165° 405 m 9774×26762 2023-11 
+29.774065°N, 115.970635°E
+29.702283°N, 115.996851°E
+Changjiang-23
+3976×2652 2018-09
+5°
+405 m 11482×34291 2022-09 
+29.817376°N, 116.033769°E
+29.725402°N, 116.064566°E
+Taizhou-1
+3976×2652 2018-10-40° 466 m 35092×24308 2021-04 
+32.355491°N, 119.805926°E
+32.290290°N, 119.900052°E
+Taizhou-6
+3976×2652 2018-10 170° 542 m 18093×38408 2023-03 
+32.254036°N, 119.90598°E
+32.151018°N, 119.954509°E
+Yunnan
+3000×2000 2016-06 100°
+/
+9394×6144
+2022-03 
+24.666899°N, 102.340055°E
+24.650422°N, 102.365252°E
+Zhuxi
+3976×2652 2022-10-15° 840 m 4119×8592 2022-09 
+32.373177°N, 109.635160°E
+32.346944°N, 109.656837°E
+Donghuayuan
+3000×2000 2018-07-1.5° 688 m
+3000×170
+2023-06 
+40.340058°N, 115.791182°E
+40.339604°N, 115.799230°E
+Huzhou-3
+3976×2652 2019-06 100° 551 m 43421×16294 2023-07 
+30.947227°N, 120.136489°E
+30.903521°N, 120.252951°E
+Huzhou-6
+3976×2652 2019-06-50° 546 m 44800×33280 2024-01 
+30.999512°N, 120.030076°E
+30.910733°N, 120.149648°E
+Huailai
+3000×2000 2018-09 170° 772 m 6593×5077 2023-06 
+40.355093°N, 115.776356°E
+40.341475°N, 115.794041°E
+Shandan
+3976×2652 2023-10 90°
+/
+29592×16582 2021-03 
+38.852301°N, 101.013109°E
+38.807825°N, 101.092483°E
+* Phi denotes the drone heading angle. The drone heading angle is the angle between the UAV longitudinal axis and the
+Earth’s North Pole and takes values in the range [-180°, 180°]. If the flight direction is due east, the Phi is 0°. If the
+flight direction is north, Phi is positive, and if the flight direction is south, Phi is negative.
+** Coordinates Range denotes the latitude and longitude range covered by satellite maps.
+IV. FUTURE PERSPECTIVES
+Our UAV-VisLoc dataset provides training and testing samples for UAV visual localization. The visual
+localization task aims to find the most similar satellite map to localize the drone’s latitude and longitude
+coordinates within the satellite map. Additionally, the drone intends to find the most relevant place (drone
+images) by where it has passed. According to its flight history, the drone could be navigated back to the
+target place.
+REFERENCES
+7
+[1] M. G. Dissanayake, P. Newman, S. Clark, H. F. Durrant-Whyte, and M. Csorba, “A solution to the simultaneous localization
+and map building (slam) problem,” IEEE Transactions on robotics and automation, vol. 17, no. 3, pp. 229–241, 2001.
+[2] Y. Lu, Z. Xue, G.-S. Xia, and L. Zhang, “A survey on vision-based uav navigation,” Geo-spatial information science,
+vol. 21, no. 1, pp. 21–32, 2018.
+[3] H. Li, J. Wang, Z. Wei, and W. Xu, “Jointly optimized global-local visual localization of uavs,” arXiv preprint
+arXiv:2310.08082, 2023.
+[4] C. Wang, J. Chen, J. Chen, A. Yue, D. He, Q. Huang, and Y. Zhang, “Unmanned aerial vehicle oblique image registration
+using an asift-based matching method,” Journal of Applied Remote Sensing, vol. 12, no. 2, pp. 025002–025002, 2018.
+[5] L. Ding, J. Zhou, L. Meng, and Z. Long, “A practical cross-view image matching method between uav and satellite for
+uav-based geo-localization,” Remote Sensing, vol. 13, no. 1, p. 47, 2020.
+[6] S. Workman, R. Souvenir, and N. Jacobs, “Wide-area image geolocalization with aerial reference imagery,” in Proceedings
+of the IEEE International Conference on Computer Vision, 2015, pp. 3961–3969.
+[7] S. Zhu, T. Yang, and C. Chen, “Vigor: Cross-view image geo-localization beyond one-to-one retrieval,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2021, pp. 3640–3649.
+[8] Z. Zheng, Y. Wei, and Y. Yang, “University-1652: A multi-view multi-source benchmark for drone-based geo-localization,”
+in Proceedings of the 28th ACM international conference on Multimedia, 2020, pp. 1395–1403.
+[9] R. Zhu, L. Yin, M. Yang, F. Wu, Y. Yang, and W. Hu, “Sues-200: A multi-height multi-scene cross-view image benchmark
+across drone and satellite,” IEEE Transactions on Circuits and Systems for Video Technology, 2023.
+[10] M. Dai, J. Huang, J. Zhuang, W. Lan, Y. Cai, and E. Zheng, “Vision-based uav localization system in denial environments,”
+arXiv preprint arXiv:2201.09201, 2022

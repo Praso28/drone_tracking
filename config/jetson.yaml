@@ -1,0 +1,32 @@
+# Edge Node Configuration (Runs on System 1 - Jetson Orin Nano)
+edge:
+  device: "cuda"
+  fp16: true
+  start_pose:
+    latitude: 29.760960
+    longitude: 115.974797
+    altitude_m: 405.0
+    heading_deg: 163.8
+
+models:
+  superpoint_engine: "data/engines/superpoint_fp16.engine"
+  superpoint_onnx: "data/engines/superpoint.onnx"
+  max_keypoints: 512
+  descriptor_dim: 256
+  match_threshold: 0.2
+
+retrieval:
+  index_path: "data/ajabgarh_ivfpq.index"
+  db_path: "data/georef.sqlite"
+  top_k: 5
+  nprobe: 10
+
+fusion:
+  position_std_m: 2.0
+  max_outlier_distance_m: 50.0
+  rolling_window: 5
+
+comms:
+  mavlink_connection: "udp:127.0.0.1:14540"
+  system_id: 1
+  component_id: 191
