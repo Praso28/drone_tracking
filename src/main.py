@@ -2,14 +2,16 @@
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
 Executes Intelligent Multi-Phase Navigation State Machine:
   - Phase 1: UNANCHORED_ACQUISITION (Cold-Start Map Anchoring from Takeoff Pose)
-  - Phase 2: HIGH_CONFIDENCE_TRACKING (Direct Visual Primary Geopose Override)
+  - Phase 2: HIGH_CONFIDENCE_TRACKING (Anchored Candidate Retrieval & Direct Visual Geopose Override)
   - Phase 3: IMU_DEAD_RECKONING (Sensor Propagation during Visual Dropout)
   - Phase 4: GLOBAL_REFIX (Trajectory Re-Anchoring upon High-Confidence Match)
   - Phase 5: EMERGENCY_HOLD (PyMAVLink Fail-Safe Stream)
+Includes candidate patch rotation un-winding into North/East geographic frame.
 """
 
 import cv2
 import time
+import math
 import argparse
 import yaml
 import numpy as np
@@ -56,6 +58,9 @@ class GPSDeniedPipeline:
         self.smoother = PoseSmoother(max_distance_m=3000.0)
         self.phase_controller = NavigationPhaseController(anchor_inliers_thresh=100, tracking_min_inliers=30)
         self.mavlink = MAVLinkBridge(connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"))
+        
+        self.anchor_lat = self.start_pose["latitude"]
+        self.anchor_lon = self.start_pose["longitude"]
         self.last_timestamp = None
 
     def run_step(self) -> Dict[str, Any]:
@@ -98,40 +103,45 @@ class GPSDeniedPipeline:
         if len(live_feats["keypoints"]) == 0:
             return {"status": "warning", "message": "No keypoints detected"}
 
-        # 3. Intelligent Map Retrieval (Spatial Prior Search from active EKF or initial Takeoff Pose)
-        if self.phase_controller.anchored:
-            spatial_prior = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
-        else:
-            spatial_prior = {"latitude": self.start_pose["latitude"], "longitude": self.start_pose["longitude"]}
-
+        # 3. Intelligent Map Retrieval (Spatial Prior Search from anchored takeoff origin)
+        spatial_prior = {"latitude": self.anchor_lat, "longitude": self.anchor_lon}
         query_vec = np.mean(live_feats["descriptors"], axis=0)
         candidates = self.retriever.search(query_vec, spatial_prior=spatial_prior, radius_km=8.0)
 
         top_cand = candidates[0] if candidates else {}
-        cand_lat = top_cand.get("center_lat", self.ekf.lat)
-        cand_lon = top_cand.get("center_lon", self.ekf.lon)
+        cand_lat = top_cand.get("center_lat", self.anchor_lat)
+        cand_lon = top_cand.get("center_lon", self.anchor_lon)
         gsd_m_per_px = top_cand.get("gsd_m_per_px", 0.2781)
+        patch_rot = top_cand.get("rotation_deg", 0)
 
-        # 4. Lazy-crop candidate satellite map patch from disk
-        sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=alt_m, heading_deg=top_cand.get("rotation_deg", 0))
+        # 4. Lazy-crop candidate satellite map patch from disk with patch rotation
+        sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=alt_m, heading_deg=patch_rot)
         gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
         sat_feats = self.sp_engine.extract(gray_sat)
 
         # 5. Perform 2D Partial Affine cross-matching
         inliers, M = self.matcher.match(live_feats, sat_feats)
 
-        # 6. Convert Affine transformation to translation & WGS84 geopose
+        # 6. Convert Affine transformation to translation & WGS84 geopose with patch rotation un-winding
         dx_px, dy_px, yaw_deg = homography_to_translation(M, (frame.shape[1] / 2.0, frame.shape[0] / 2.0))
         fov_base_px = 512.0
         crop_size = int(fov_base_px * (alt_m / 100.0))
         scale_factor = crop_size / 640.0
 
+        dx_map = dx_px * scale_factor
+        dy_map = dy_px * scale_factor
+
+        # Un-rotate pixel displacement vector into North/East geographic frame
+        rot_rad = math.radians(-patch_rot)
+        dx_rot = dx_map * math.cos(rot_rad) - dy_map * math.sin(rot_rad)
+        dy_rot = dx_map * math.sin(rot_rad) + dy_map * math.cos(rot_rad)
+
         raw_pose = compute_geopose(
             ref_lat=cand_lat,
             ref_lon=cand_lon,
-            dx_px=dx_px * scale_factor,
-            dy_px=dy_px * scale_factor,
-            yaw_deg=yaw_deg,
+            dx_px=dx_rot,
+            dy_px=dy_rot,
+            yaw_deg=yaw_deg + patch_rot,
             gsd_m_per_px=gsd_m_per_px
         )
 
@@ -141,7 +151,9 @@ class GPSDeniedPipeline:
 
         if phase_res["use_visual_fix"]:
             # Direct 100% visual override during High-Confidence Visual Tracking
-            final_pose = self.ekf.update_visual_fix({"latitude": raw_pose["latitude"], "longitude": raw_pose["longitude"], "heading_deg": yaw_deg})
+            final_pose = self.ekf.update_visual_fix({"latitude": raw_pose["latitude"], "longitude": raw_pose["longitude"], "heading_deg": yaw_deg + patch_rot})
+            self.anchor_lat = final_pose["latitude"]
+            self.anchor_lon = final_pose["longitude"]
             self.mavlink.send_vision_position_estimate(final_pose)
         else:
             final_pose = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
