@@ -11,7 +11,7 @@ from shared.geo.tile_math import haversine_distance, pixel_to_latlon
 class PoseSmoother:
     """Rolling median filter for position outlier rejection with cold-start warmup."""
 
-    def __init__(self, window_size: int = 5, max_distance_m: float = 100.0, warmup_fixes: int = 5):
+    def __init__(self, window_size: int = 5, max_distance_m: float = 3000.0, warmup_fixes: int = 5):
         self.window_size = window_size
         self.max_distance_m = max_distance_m
         self.warmup_fixes = warmup_fixes
@@ -100,7 +100,7 @@ class SimpleEKFFusion:
             self.lon = fix["longitude"]
             self.initialized = True
         else:
-            alpha = 0.8  # Fast Kalman Gain
+            alpha = 0.85  # Fast Kalman Gain for dynamic flight tracking
             self.lat = (1 - alpha) * self.lat + alpha * fix["latitude"]
             self.lon = (1 - alpha) * self.lon + alpha * fix["longitude"]
 
