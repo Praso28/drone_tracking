@@ -1,7 +1,7 @@
 """
 LightGlue & RANSAC Feature Matcher for live drone vs retrieved satellite map patch matching.
 Executes memory-efficient matrix multiplication (O(M*N) memory) nearest-neighbor matching
-and estimates homography matrix H via RANSAC.
+and estimates robust 2D Rigid/Affine similarity transformation matrix M via RANSAC.
 """
 
 import cv2
@@ -23,7 +23,7 @@ class LightGlueMatcher:
         """
         Matches live query features (feats0) against candidate satellite patch features (feats1).
         Uses O(M*N) matrix multiplication instead of 3D broadcasting to prevent memory spikes.
-        Returns (inlier_count, H_3x3).
+        Returns (inlier_count, M_2x3).
         """
         kps0 = feats0.get("keypoints", np.zeros((0, 2)))
         kps1 = feats1.get("keypoints", np.zeros((0, 2)))
@@ -31,7 +31,7 @@ class LightGlueMatcher:
         desc1 = feats1.get("descriptors", np.zeros((0, 256)))
 
         if len(kps0) < 4 or len(kps1) < 4:
-            return 0, np.eye(3, dtype=np.float32)
+            return 0, np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
 
         # Cap max keypoints to prevent runaway computations
         max_k = 512
@@ -71,9 +71,10 @@ class LightGlueMatcher:
         pts0 = np.float32([pts0_raw[i] for i, j in valid_matches])
         pts1 = np.float32([pts1_raw[j] for i, j in valid_matches])
 
-        H, mask = cv2.findHomography(pts0, pts1, cv2.RANSAC, 8.0)
-        if H is None:
-            return 0, np.eye(3, dtype=np.float32)
+        # Estimate robust Partial Affine Similarity matrix M [2x3] (Scale + Rotation + Translation)
+        M, mask = cv2.estimateAffinePartial2D(pts0, pts1, method=cv2.RANSAC, ransacReprojThreshold=8.0)
+        if M is None:
+            return 0, np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
 
         inliers = int(np.sum(mask)) if mask is not None else 0
-        return inliers, H
+        return inliers, M

@@ -21,33 +21,48 @@ def augment_patch_rotations(patch_img: np.ndarray) -> List[Tuple[int, np.ndarray
 
 
 def homography_to_translation(
-    H: np.ndarray,
+    M: np.ndarray,
     patch_center_px: Tuple[float, float]
 ) -> Tuple[float, float, float]:
     """
-    Computes (dx_px, dy_px, yaw_deg) from a 3x3 homography matrix H.
+    Computes (dx_px, dy_px, yaw_deg) from a 2x3 Affine matrix or 3x3 Homography matrix M.
     Maps query center to reference patch coordinate system.
     """
-    if H is None or H.shape != (3, 3):
+    if M is None:
         return 0.0, 0.0, 0.0
 
     cx, cy = patch_center_px
-    query_center = np.array([cx, cy, 1.0], dtype=np.float64)
-    ref_proj = H @ query_center
-    if abs(ref_proj[2]) > 1e-8:
-        ref_proj /= ref_proj[2]
 
-    dx_px = ref_proj[0] - cx
-    dy_px = ref_proj[1] - cy
+    if M.shape == (2, 3):
+        # 2x3 Affine Similarity Transformation Matrix [ [s*cos(theta), -s*sin(theta), tx], [s*sin(theta), s*cos(theta), ty] ]
+        tx = float(M[0, 2])
+        ty = float(M[1, 2])
+        yaw_rad = math.atan2(M[1, 0], M[0, 0])
+        yaw_deg = math.degrees(yaw_rad)
 
-    # Extract yaw rotation angle from 2x2 homography submatrix
-    rotation_submatrix = H[:2, :2]
-    u, _, vt = np.linalg.svd(rotation_submatrix)
-    R = u @ vt
-    yaw_rad = math.atan2(R[1, 0], R[0, 0])
-    yaw_deg = math.degrees(yaw_rad)
+        # Center displacement offset in pixels
+        dx_px = tx + M[0, 0] * cx + M[0, 1] * cy - cx
+        dy_px = ty + M[1, 0] * cx + M[1, 1] * cy - cy
+        return float(dx_px), float(dy_px), float(yaw_deg)
 
-    return float(dx_px), float(dy_px), float(yaw_deg)
+    elif M.shape == (3, 3):
+        # Fallback 3x3 Homography projection
+        query_center = np.array([cx, cy, 1.0], dtype=np.float64)
+        ref_proj = M @ query_center
+        if abs(ref_proj[2]) > 1e-8:
+            ref_proj /= ref_proj[2]
+
+        dx_px = ref_proj[0] - cx
+        dy_px = ref_proj[1] - cy
+
+        rotation_submatrix = M[:2, :2]
+        u, _, vt = np.linalg.svd(rotation_submatrix)
+        R = u @ vt
+        yaw_rad = math.atan2(R[1, 0], R[0, 0])
+        yaw_deg = math.degrees(yaw_rad)
+        return float(dx_px), float(dy_px), float(yaw_deg)
+
+    return 0.0, 0.0, 0.0
 
 
 def ransac_pose_vote(
@@ -61,7 +76,6 @@ def ransac_pose_vote(
     if not candidates:
         return {"valid": False, "reason": "No candidates provided"}
 
-    # Sort candidates by inlier count descending
     sorted_candidates = sorted(candidates, key=lambda c: c.get("inliers", 0), reverse=True)
     best = sorted_candidates[0]
 
