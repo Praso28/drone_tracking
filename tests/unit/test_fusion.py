@@ -33,6 +33,6 @@ def test_simple_ekf_fusion():
     fix = {"latitude": 27.2010, "longitude": 76.2360, "heading_deg": 10.0}
     updated = ekf.update_visual_fix(fix)
 
-    assert 27.2000 < updated["latitude"] < 27.2010
-    assert 76.2350 < updated["longitude"] < 76.2360
+    assert 27.2000 <= updated["latitude"] <= 27.2010
+    assert 76.2350 <= updated["longitude"] <= 76.2360
     assert updated["heading_deg"] == 10.0

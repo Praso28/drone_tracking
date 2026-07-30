@@ -1,7 +1,7 @@
 """
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
-Executes real-time visual localization, FAISS map search, LightGlue cross-matching,
-IMU EKF fusion, and MAVLink output stream.
+Executes real-time visual localization, spatial-prior FAISS map search, LightGlue 2D Affine matching,
+IMU EKF fusion, Sensor Health Monitoring, and PyMAVLink output stream.
 Memory-mapped lazy satellite patch sampling enabled for low RAM footprint (<50MB).
 Includes graceful shutdown and resource cleanup handlers.
 """
@@ -21,6 +21,7 @@ from src.inference.trt_engine import SuperPointEngine
 from src.inference.lightglue_matcher import LightGlueMatcher
 from src.retrieval.local_faiss import LocalFaissRetriever
 from src.fusion.ekf_node import SimpleEKFFusion, PoseSmoother
+from src.fusion.health_monitor import SensorHealthMonitor
 from src.comms.mavlink_bridge import MAVLinkBridge
 
 logger = setup_logger("main")
@@ -57,6 +58,7 @@ class GPSDeniedPipeline:
         )
         self.ekf = SimpleEKFFusion(start_pose["latitude"], start_pose["longitude"])
         self.smoother = PoseSmoother()
+        self.health_monitor = SensorHealthMonitor()
         self.mavlink = MAVLinkBridge(connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"))
 
     def run_step(self) -> Dict[str, Any]:
@@ -88,9 +90,10 @@ class GPSDeniedPipeline:
         if len(live_feats["keypoints"]) == 0:
             return {"status": "warning", "message": "No keypoints detected"}
 
-        # 3. Retrieve top candidate satellite map patch from FAISS index
+        # 3. Retrieve candidate satellite map patch from FAISS index using spatial prior
+        spatial_prior = {"latitude": self.ekf.lat, "longitude": self.ekf.lon} if self.ekf.initialized else None
         query_vector = np.mean(live_feats["descriptors"], axis=0)
-        candidates = self.retriever.search(query_vector)
+        candidates = self.retriever.search(query_vector, spatial_prior=spatial_prior, radius_km=1.5)
         top_cand = candidates[0] if candidates else {}
 
         # 4. Lazy-crop candidate satellite map patch from disk at retrieved candidate coordinate
@@ -102,11 +105,11 @@ class GPSDeniedPipeline:
         gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
         sat_feats = self.sp_engine.extract(gray_sat)
 
-        # 5. Perform cross-matching between live drone frame and retrieved satellite map patch
-        inliers, H = self.matcher.match(live_feats, sat_feats)
+        # 5. Perform 2D Partial Affine cross-matching between live drone frame and retrieved satellite map patch
+        inliers, M = self.matcher.match(live_feats, sat_feats)
 
-        # 6. Convert homography transformation to translation & WGS84 geopose
-        dx_px, dy_px, yaw_deg = homography_to_translation(H, (frame.shape[1] / 2.0, frame.shape[0] / 2.0))
+        # 6. Convert Affine transformation to translation & WGS84 geopose
+        dx_px, dy_px, yaw_deg = homography_to_translation(M, (frame.shape[1] / 2.0, frame.shape[0] / 2.0))
         raw_pose = compute_geopose(
             ref_lat=cand_lat,
             ref_lon=cand_lon,
@@ -116,14 +119,16 @@ class GPSDeniedPipeline:
             gsd_m_per_px=gsd_m_per_px
         )
 
-        # 7. Outlier filtering, EKF state update, and MAVLink streaming
+        # 7. Outlier filtering, EKF state update, and Sensor Health Evaluation
         smooth_res = self.smoother.filter(raw_pose)
+        health_res = self.health_monitor.evaluate_step(inliers, smooth_res["accepted"])
+
         if smooth_res["accepted"]:
             final_pose = self.ekf.update_visual_fix(smooth_res["pose"])
             self.mavlink.send_vision_position_estimate(final_pose)
-            self.state = "TRACKING"
+            self.state = health_res["health_state"]
         else:
-            self.state = "ANCHORING"
+            self.state = health_res["health_state"]
             final_pose = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
 
         gt_lat = telemetry.gt_latitude if telemetry else None
