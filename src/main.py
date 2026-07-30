@@ -2,8 +2,7 @@
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
 Executes real-time visual localization, spatial-prior FAISS map search, LightGlue 2D Affine matching,
 IMU EKF fusion, Sensor Health Monitoring, and PyMAVLink output stream.
-Memory-mapped lazy satellite patch sampling enabled for low RAM footprint (<50MB).
-Includes graceful shutdown and resource cleanup handlers.
+Includes explicit diagnostic logging to isolate pipeline coordinate transformations.
 """
 
 import cv2
@@ -96,11 +95,14 @@ class GPSDeniedPipeline:
         candidates = self.retriever.search(query_vector, spatial_prior=spatial_prior, radius_km=1.5)
         top_cand = candidates[0] if candidates else {}
 
-        # 4. Lazy-crop candidate satellite map patch from disk at retrieved candidate coordinate
         cand_lat = top_cand.get("center_lat", 29.760960)
         cand_lon = top_cand.get("center_lon", 115.974797)
         gsd_m_per_px = top_cand.get("gsd_m_per_px", 0.2781)
 
+        # Explicit diagnostic log
+        logger.debug(f"[DIAGNOSTIC] top_cand: lat={cand_lat:.6f}, lon={cand_lon:.6f}, gsd={gsd_m_per_px:.4f}")
+
+        # 4. Lazy-crop candidate satellite map patch from disk at retrieved candidate coordinate
         sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=405.0, heading_deg=top_cand.get("rotation_deg", 0))
         gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
         sat_feats = self.sp_engine.extract(gray_sat)
@@ -110,6 +112,7 @@ class GPSDeniedPipeline:
 
         # 6. Convert Affine transformation to translation & WGS84 geopose
         dx_px, dy_px, yaw_deg = homography_to_translation(M, (frame.shape[1] / 2.0, frame.shape[0] / 2.0))
+
         raw_pose = compute_geopose(
             ref_lat=cand_lat,
             ref_lon=cand_lon,
@@ -118,6 +121,8 @@ class GPSDeniedPipeline:
             yaw_deg=yaw_deg,
             gsd_m_per_px=gsd_m_per_px
         )
+
+        logger.debug(f"[DIAGNOSTIC] dx_px={dx_px:.1f}, dy_px={dy_px:.1f} -> raw_pose: ({raw_pose['latitude']:.6f}, {raw_pose['longitude']:.6f})")
 
         # 7. Outlier filtering, EKF state update, and Sensor Health Evaluation
         smooth_res = self.smoother.filter(raw_pose)
@@ -173,6 +178,7 @@ def main():
     parser.add_argument("--mode", type=str, default="sim", choices=["sim", "zmq"], help="Frame acquisition mode")
     parser.add_argument("--pc-host", type=str, default="10.1.1.13", help="PC host IP for ZMQ stream")
     parser.add_argument("--steps", type=int, default=10, help="Number of control loop steps to run")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose diagnostic logging")
     args = parser.parse_args()
 
     pipeline = GPSDeniedPipeline(args.config, mode=args.mode, pc_host=args.pc_host)
