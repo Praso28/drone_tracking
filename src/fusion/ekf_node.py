@@ -1,6 +1,7 @@
 """
 EKF state estimator and rolling median outlier rejection filter for position fixes.
 Includes IMU sensor pre-integration for dead-reckoning state estimation between visual fixes.
+Includes velocity drift reset and bounding to prevent runaway position integration.
 """
 
 import numpy as np
@@ -70,7 +71,6 @@ class SimpleEKFFusion:
         """
         Integrates IMU linear accelerations with gravity compensation and attitude rotation.
         """
-        # Convert attitude to radians
         r = np.radians(roll_deg)
         p = np.radians(pitch_deg)
 
@@ -78,9 +78,9 @@ class SimpleEKFFusion:
         ax_comp = ax - 9.81 * np.sin(p)
         ay_comp = ay + 9.81 * np.sin(r) * np.cos(p)
 
-        # Integrate planar velocity
-        self.vx += ax_comp * dt
-        self.vy += ay_comp * dt
+        # Integrate planar velocity with bounding (-15 m/s to +15 m/s)
+        self.vx = np.clip(self.vx + ax_comp * dt, -15.0, 15.0)
+        self.vy = np.clip(self.vy + ay_comp * dt, -15.0, 15.0)
 
         dx_m = self.vx * dt
         dy_m = self.vy * dt
@@ -100,13 +100,13 @@ class SimpleEKFFusion:
             self.lon = fix["longitude"]
             self.initialized = True
         else:
-            alpha = 0.85  # Fast Kalman Gain for dynamic flight tracking
+            alpha = 0.9  # Direct Visual Tracking Priority
             self.lat = (1 - alpha) * self.lat + alpha * fix["latitude"]
             self.lon = (1 - alpha) * self.lon + alpha * fix["longitude"]
 
-        # Reset velocity drift on visual update
-        self.vx *= 0.5
-        self.vy *= 0.5
+        # Reset IMU velocity integration drift completely on valid visual fix update
+        self.vx = 0.0
+        self.vy = 0.0
 
         return {
             "latitude": self.lat,
