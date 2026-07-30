@@ -1,6 +1,6 @@
 """
 SQLite + FAISS Vector Database Retriever for satellite map patches.
-Supports spatial radius filtering, SQL bounding box queries,
+Supports spatial radius filtering, SQL bounding box queries with exact distance ordering,
 and fast persistent handle searching.
 """
 
@@ -44,17 +44,17 @@ class LocalFaissRetriever:
         self,
         query_vector: np.ndarray,
         spatial_prior: Optional[Dict[str, float]] = None,
-        radius_km: float = 1.5
+        radius_km: float = 8.0
     ) -> List[Dict[str, Any]]:
         """
         Searches index for top_k candidate map patches.
-        When spatial_prior is provided, filters and ranks candidates by geographic distance to EKF position.
+        When spatial_prior is provided, orders candidates by geographic distance to EKF position in SQL.
         """
         query_descriptor = np.ascontiguousarray(query_vector, dtype=np.float32)
         if query_descriptor.ndim == 1:
             query_descriptor = np.expand_dims(query_descriptor, axis=0)
 
-        # 1. Spatial Prior Radius Search via SQLite Bounding Box Query
+        # 1. Spatial Prior Radius Search via SQL Bounding Box & Distance Order Query
         if spatial_prior is not None and self.conn is not None:
             prior_lat = spatial_prior["latitude"]
             prior_lon = spatial_prior["longitude"]
@@ -66,21 +66,19 @@ class LocalFaissRetriever:
 
             cursor = self.conn.cursor()
             cursor.execute("""
-                SELECT patch_id, center_lat, center_lon, rotation_deg, gsd_m_per_px, descriptor_index
+                SELECT patch_id, center_lat, center_lon, rotation_deg, gsd_m_per_px, descriptor_index,
+                       ((center_lat - ?) * (center_lat - ?) + (center_lon - ?) * (center_lon - ?)) AS sq_dist
                 FROM patches
                 WHERE center_lat BETWEEN ? AND ? AND center_lon BETWEEN ? AND ?
+                ORDER BY sq_dist ASC
                 LIMIT ?
-            """, (min_lat, max_lat, min_lon, max_lon, self.top_k * 10))
+            """, (prior_lat, prior_lat, prior_lon, prior_lon, min_lat, max_lat, min_lon, max_lon, self.top_k))
 
             rows = cursor.fetchall()
             if rows:
-                # Rank candidates by spatial Haversine distance to EKF position estimate
-                rows_sorted = sorted(
-                    rows,
-                    key=lambda r: haversine_distance(prior_lat, prior_lon, r[1], r[2])
-                )
                 results = []
-                for r in rows_sorted[:self.top_k]:
+                for r in rows:
+                    dist = haversine_distance(prior_lat, prior_lon, r[1], r[2])
                     results.append({
                         "patch_id": r[0],
                         "center_lat": r[1],
@@ -88,7 +86,7 @@ class LocalFaissRetriever:
                         "rotation_deg": r[3],
                         "gsd_m_per_px": r[4],
                         "descriptor_index": r[5],
-                        "distance": haversine_distance(prior_lat, prior_lon, r[1], r[2])
+                        "distance": dist
                     })
                 return results
 
