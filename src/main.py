@@ -34,7 +34,11 @@ class GPSDeniedPipeline:
             self.cfg = yaml.safe_load(f)
 
         edge_cfg = self.cfg.get("edge", {})
-        start_pose = edge_cfg.get("start_pose", {"latitude": 27.2000, "longitude": 76.2350})
+        map_cfg = self.cfg.get("map", {})
+        start_pose = edge_cfg.get("start_pose", {"latitude": 29.760960, "longitude": 115.974797})
+
+        texture_path = map_cfg.get("satellite_texture_path", "data/satellite01.jpg")
+        bbox = tuple(map_cfg.get("bbox", [29.702283, 115.970635, 29.774065, 115.996851]))
 
         self.mode = mode
         self.state = "INIT"
@@ -42,9 +46,9 @@ class GPSDeniedPipeline:
         if mode == "zmq":
             self.camera = ZMQReceiver(host=pc_host, port=5555)
         else:
-            self.camera = SimCamera()
+            self.camera = SimCamera(texture_path=texture_path, bbox=bbox)
 
-        self.sat_sampler = SimCamera()
+        self.sat_sampler = SimCamera(texture_path=texture_path, bbox=bbox)
         self.sp_engine = SuperPointEngine(descriptor_dim=256)
         self.matcher = LightGlueMatcher()
         self.retriever = LocalFaissRetriever(
@@ -90,11 +94,11 @@ class GPSDeniedPipeline:
         top_cand = candidates[0] if candidates else {}
 
         # 4. Lazy-crop candidate satellite map patch from disk at retrieved candidate coordinate
-        cand_lat = top_cand.get("center_lat", 27.2000)
-        cand_lon = top_cand.get("center_lon", 76.2350)
-        gsd_m_per_px = top_cand.get("gsd_m_per_px", 0.5)
+        cand_lat = top_cand.get("center_lat", 29.760960)
+        cand_lon = top_cand.get("center_lon", 115.974797)
+        gsd_m_per_px = top_cand.get("gsd_m_per_px", 0.2781)
 
-        sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=100.0, heading_deg=top_cand.get("rotation_deg", 0))
+        sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=405.0, heading_deg=top_cand.get("rotation_deg", 0))
         gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
         sat_feats = self.sp_engine.extract(gray_sat)
 

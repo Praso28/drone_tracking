@@ -8,6 +8,10 @@ edge:
     altitude_m: 405.0
     heading_deg: 163.8
 
+map:
+  satellite_texture_path: "data/satellite01.jpg"
+  bbox: [29.702283, 115.970635, 29.774065, 115.996851]
+
 models:
   superpoint_engine: "data/engines/superpoint_fp16.engine"
   superpoint_onnx: "data/engines/superpoint.onnx"
