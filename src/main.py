@@ -2,7 +2,7 @@
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
 Executes real-time visual localization, spatial-prior FAISS map search, LightGlue 2D Affine matching,
 IMU EKF fusion, Sensor Health Monitoring, and PyMAVLink output stream.
-Includes altitude scale-factor correction for GSD pixel offset mapping.
+Includes spatial prior candidate search from initial takeoff pose.
 """
 
 import cv2
@@ -91,10 +91,10 @@ class GPSDeniedPipeline:
         if len(live_feats["keypoints"]) == 0:
             return {"status": "warning", "message": "No keypoints detected"}
 
-        # 3. Retrieve candidate satellite map patch from FAISS index using spatial prior
-        spatial_prior = {"latitude": self.ekf.lat, "longitude": self.ekf.lon} if self.ekf.initialized else None
+        # 3. Retrieve candidate satellite map patch using spatial prior around EKF estimate
+        spatial_prior = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
         query_vector = np.mean(live_feats["descriptors"], axis=0)
-        candidates = self.retriever.search(query_vector, spatial_prior=spatial_prior, radius_km=1.5)
+        candidates = self.retriever.search(query_vector, spatial_prior=spatial_prior, radius_km=3.0)
         top_cand = candidates[0] if candidates else {}
 
         cand_lat = top_cand.get("center_lat", self.ekf.lat)
