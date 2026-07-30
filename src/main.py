@@ -2,7 +2,7 @@
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
 Executes real-time visual localization, spatial-prior FAISS map search, LightGlue 2D Affine matching,
 IMU EKF fusion, Sensor Health Monitoring, and PyMAVLink output stream.
-Includes explicit diagnostic logging to isolate pipeline coordinate transformations.
+Includes altitude scale-factor correction for GSD pixel offset mapping.
 """
 
 import cv2
@@ -35,7 +35,7 @@ class GPSDeniedPipeline:
 
         edge_cfg = self.cfg.get("edge", {})
         map_cfg = self.cfg.get("map", {})
-        start_pose = edge_cfg.get("start_pose", {"latitude": 29.760960, "longitude": 115.974797})
+        start_pose = edge_cfg.get("start_pose", {"latitude": 29.707128, "longitude": 115.976814})
 
         texture_path = map_cfg.get("satellite_texture_path", "data/satellite01.jpg")
         bbox = tuple(map_cfg.get("bbox", [29.702283, 115.970635, 29.774065, 115.996851]))
@@ -56,7 +56,7 @@ class GPSDeniedPipeline:
             db_path=self.cfg.get("retrieval", {}).get("db_path", "data/georef.sqlite")
         )
         self.ekf = SimpleEKFFusion(start_pose["latitude"], start_pose["longitude"])
-        self.smoother = PoseSmoother()
+        self.smoother = PoseSmoother(max_distance_m=3000.0)
         self.health_monitor = SensorHealthMonitor()
         self.mavlink = MAVLinkBridge(connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"))
 
@@ -70,6 +70,8 @@ class GPSDeniedPipeline:
 
         if not success or frame is None:
             return {"status": "error", "message": "Frame acquisition failed"}
+
+        alt_m = telemetry.gt_altitude_m if telemetry else 405.0
 
         # 1. IMU state prediction update with gravity compensation
         if telemetry is not None:
@@ -95,34 +97,36 @@ class GPSDeniedPipeline:
         candidates = self.retriever.search(query_vector, spatial_prior=spatial_prior, radius_km=1.5)
         top_cand = candidates[0] if candidates else {}
 
-        cand_lat = top_cand.get("center_lat", 29.760960)
-        cand_lon = top_cand.get("center_lon", 115.974797)
+        cand_lat = top_cand.get("center_lat", self.ekf.lat)
+        cand_lon = top_cand.get("center_lon", self.ekf.lon)
         gsd_m_per_px = top_cand.get("gsd_m_per_px", 0.2781)
 
-        # Explicit diagnostic log
-        logger.debug(f"[DIAGNOSTIC] top_cand: lat={cand_lat:.6f}, lon={cand_lon:.6f}, gsd={gsd_m_per_px:.4f}")
-
         # 4. Lazy-crop candidate satellite map patch from disk at retrieved candidate coordinate
-        sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=405.0, heading_deg=top_cand.get("rotation_deg", 0))
+        sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=alt_m, heading_deg=top_cand.get("rotation_deg", 0))
         gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
         sat_feats = self.sp_engine.extract(gray_sat)
 
         # 5. Perform 2D Partial Affine cross-matching between live drone frame and retrieved satellite map patch
         inliers, M = self.matcher.match(live_feats, sat_feats)
 
-        # 6. Convert Affine transformation to translation & WGS84 geopose
+        # 6. Convert Affine transformation to translation & WGS84 geopose with altitude scale factor
         dx_px, dy_px, yaw_deg = homography_to_translation(M, (frame.shape[1] / 2.0, frame.shape[0] / 2.0))
+
+        fov_base_px = 512.0
+        crop_size = int(fov_base_px * (alt_m / 100.0))
+        scale_factor = crop_size / 640.0
+
+        dx_map_px = dx_px * scale_factor
+        dy_map_px = dy_px * scale_factor
 
         raw_pose = compute_geopose(
             ref_lat=cand_lat,
             ref_lon=cand_lon,
-            dx_px=dx_px,
-            dy_px=dy_px,
+            dx_px=dx_map_px,
+            dy_px=dy_map_px,
             yaw_deg=yaw_deg,
             gsd_m_per_px=gsd_m_per_px
         )
-
-        logger.debug(f"[DIAGNOSTIC] dx_px={dx_px:.1f}, dy_px={dy_px:.1f} -> raw_pose: ({raw_pose['latitude']:.6f}, {raw_pose['longitude']:.6f})")
 
         # 7. Outlier filtering, EKF state update, and Sensor Health Evaluation
         smooth_res = self.smoother.filter(raw_pose)
