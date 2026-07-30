@@ -2,7 +2,7 @@
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
 Executes Intelligent Multi-Phase Navigation State Machine:
   - Phase 1: UNANCHORED_ACQUISITION (Cold-Start Map Anchoring from Takeoff Pose)
-  - Phase 2: HIGH_CONFIDENCE_TRACKING (Visual Primary Navigation & IMU Velocity Reset)
+  - Phase 2: HIGH_CONFIDENCE_TRACKING (Direct Visual Primary Geopose Override)
   - Phase 3: IMU_DEAD_RECKONING (Sensor Propagation during Visual Dropout)
   - Phase 4: GLOBAL_REFIX (Trajectory Re-Anchoring upon High-Confidence Match)
   - Phase 5: EMERGENCY_HOLD (PyMAVLink Fail-Safe Stream)
@@ -56,6 +56,7 @@ class GPSDeniedPipeline:
         self.smoother = PoseSmoother(max_distance_m=3000.0)
         self.phase_controller = NavigationPhaseController(anchor_inliers_thresh=100, tracking_min_inliers=30)
         self.mavlink = MAVLinkBridge(connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"))
+        self.last_timestamp = None
 
     def run_step(self) -> Dict[str, Any]:
         """Executes a single step of the intelligent multi-phase edge navigation loop."""
@@ -70,15 +71,24 @@ class GPSDeniedPipeline:
 
         alt_m = telemetry.gt_altitude_m if telemetry else 405.0
 
-        # 1. IMU Dead-Reckoning State Prediction
-        if telemetry is not None:
+        # Calculate exact inter-frame timestamp delta dt
+        now_ts = telemetry.timestamp if telemetry else time.time()
+        if self.last_timestamp is not None:
+            dt = max(0.01, min(1.0, now_ts - self.last_timestamp))
+        else:
+            dt = 1.0 / 30.0
+        self.last_timestamp = now_ts
+
+        # 1. IMU Dead-Reckoning State Prediction (Only used during IMU propagation phase)
+        if telemetry is not None and not self.phase_controller.anchored:
             self.ekf.predict_imu(
                 telemetry.imu_ax,
                 telemetry.imu_ay,
                 telemetry.imu_az,
                 roll_deg=0.0,
                 pitch_deg=0.0,
-                yaw_deg=telemetry.gt_heading_deg
+                yaw_deg=telemetry.gt_heading_deg,
+                dt=dt
             )
 
         # 2. Extract visual features from live drone camera frame
@@ -125,12 +135,13 @@ class GPSDeniedPipeline:
             gsd_m_per_px=gsd_m_per_px
         )
 
-        # 7. Evaluate Multi-Phase State Transitions
+        # 7. Evaluate Multi-Phase State Transitions & Apply Absolute Visual Fix
         smooth_res = self.smoother.filter(raw_pose)
         phase_res = self.phase_controller.evaluate_step(inliers, smooth_res["accepted"], raw_pose)
 
         if phase_res["use_visual_fix"]:
-            final_pose = self.ekf.update_visual_fix(smooth_res["pose"])
+            # Direct 100% visual override during High-Confidence Visual Tracking
+            final_pose = self.ekf.update_visual_fix({"latitude": raw_pose["latitude"], "longitude": raw_pose["longitude"], "heading_deg": yaw_deg})
             self.mavlink.send_vision_position_estimate(final_pose)
         else:
             final_pose = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
