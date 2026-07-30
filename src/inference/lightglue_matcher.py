@@ -1,7 +1,7 @@
 """
 LightGlue & RANSAC Feature Matcher for live drone vs retrieved satellite map patch matching.
 Executes memory-efficient matrix multiplication (O(M*N) memory) nearest-neighbor matching
-and estimates robust 2D Rigid/Affine similarity transformation matrix M via RANSAC.
+and estimates robust 2D Rigid/Affine similarity transformation matrix M via RANSAC with median fallback.
 """
 
 import cv2
@@ -73,8 +73,15 @@ class LightGlueMatcher:
 
         # Estimate robust Partial Affine Similarity matrix M [2x3] (Scale + Rotation + Translation)
         M, mask = cv2.estimateAffinePartial2D(pts0, pts1, method=cv2.RANSAC, ransacReprojThreshold=8.0)
-        if M is None:
-            return 0, np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
 
-        inliers = int(np.sum(mask)) if mask is not None else 0
+        # Fallback to robust median translation shift if affine matrix degenerates
+        det = abs(M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]) if M is not None else 0.0
+        if M is None or det < 0.05:
+            dx = float(np.median(pts1[:, 0] - pts0[:, 0]))
+            dy = float(np.median(pts1[:, 1] - pts0[:, 1]))
+            M = np.array([[1.0, 0.0, dx], [0.0, 1.0, dy]], dtype=np.float32)
+            inliers = len(valid_matches)
+        else:
+            inliers = int(np.sum(mask)) if mask is not None else len(valid_matches)
+
         return inliers, M
