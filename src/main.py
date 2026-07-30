@@ -2,7 +2,7 @@
 Main control loop for GPS-Denied Visual Navigation System (Runs on System 1 - Jetson Orin Nano).
 Executes real-time visual localization, spatial-prior FAISS map search, LightGlue 2D Affine matching,
 IMU EKF fusion, Sensor Health Monitoring, and PyMAVLink output stream.
-Includes spatial prior candidate search from initial takeoff pose.
+Includes wide-radius 8.0km spatial search window for robust takeoff position acquisition.
 """
 
 import cv2
@@ -35,7 +35,7 @@ class GPSDeniedPipeline:
 
         edge_cfg = self.cfg.get("edge", {})
         map_cfg = self.cfg.get("map", {})
-        start_pose = edge_cfg.get("start_pose", {"latitude": 29.707128, "longitude": 115.976814})
+        start_pose = edge_cfg.get("start_pose", {"latitude": 29.739041, "longitude": 115.985113})
 
         texture_path = map_cfg.get("satellite_texture_path", "data/satellite01.jpg")
         bbox = tuple(map_cfg.get("bbox", [29.702283, 115.970635, 29.774065, 115.996851]))
@@ -56,7 +56,7 @@ class GPSDeniedPipeline:
             db_path=self.cfg.get("retrieval", {}).get("db_path", "data/georef.sqlite")
         )
         self.ekf = SimpleEKFFusion(start_pose["latitude"], start_pose["longitude"])
-        self.smoother = PoseSmoother(max_distance_m=3000.0)
+        self.smoother = PoseSmoother(max_distance_m=5000.0)
         self.health_monitor = SensorHealthMonitor()
         self.mavlink = MAVLinkBridge(connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"))
 
@@ -91,10 +91,10 @@ class GPSDeniedPipeline:
         if len(live_feats["keypoints"]) == 0:
             return {"status": "warning", "message": "No keypoints detected"}
 
-        # 3. Retrieve candidate satellite map patch using spatial prior around EKF estimate
+        # 3. Retrieve candidate satellite map patch using wide 8.0km spatial search radius
         spatial_prior = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
         query_vector = np.mean(live_feats["descriptors"], axis=0)
-        candidates = self.retriever.search(query_vector, spatial_prior=spatial_prior, radius_km=3.0)
+        candidates = self.retriever.search(query_vector, spatial_prior=spatial_prior, radius_km=8.0)
         top_cand = candidates[0] if candidates else {}
 
         cand_lat = top_cand.get("center_lat", self.ekf.lat)
