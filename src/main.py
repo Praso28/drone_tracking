@@ -9,6 +9,7 @@ Executes Intelligent Multi-Phase Navigation State Machine:
 Includes candidate patch rotation un-winding into North/East geographic frame.
 """
 
+import os
 import cv2
 import time
 import math
