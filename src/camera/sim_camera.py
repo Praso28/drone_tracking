@@ -12,6 +12,8 @@ import numpy as np
 from PIL import Image
 from typing import Tuple, Optional
 
+Image.MAX_IMAGE_PIXELS = None
+
 
 class SimCamera:
     """Generates realistic down-looking drone video frames from satellite map texture."""

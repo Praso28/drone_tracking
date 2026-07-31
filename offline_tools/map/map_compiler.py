@@ -16,6 +16,8 @@ import numpy as np
 from PIL import Image
 from typing import List, Tuple, Dict, Any
 
+Image.MAX_IMAGE_PIXELS = None
+
 from shared.geo.tile_math import tile_to_latlon, calculate_gsd, pixel_to_latlon
 from shared.geo.pose_math import augment_patch_rotations
 from shared.logging_cfg import setup_logger

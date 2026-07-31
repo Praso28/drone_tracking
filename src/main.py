@@ -110,6 +110,10 @@ class GPSDeniedPipeline:
         # 3. Intelligent Map Retrieval (Spatial Prior Search from anchored takeoff origin)
         spatial_prior = {"latitude": self.anchor_lat, "longitude": self.anchor_lon}
         query_vec = np.mean(live_feats["descriptors"], axis=0)
+        norm = np.linalg.norm(query_vec)
+        if norm > 1e-6:
+            query_vec = query_vec / norm
+        query_vec = query_vec.astype(np.float32)
         candidates = self.retriever.search(query_vec, spatial_prior=spatial_prior, radius_km=8.0)
 
         # 4. Multi-candidate RANSAC voting consensus evaluation
