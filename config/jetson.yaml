@@ -2,14 +2,14 @@ edge:
   device: "cuda"
   fp16: true
   start_pose:
-    latitude: 27.2000
-    longitude: 76.2350
-    altitude_m: 100.0
+    latitude: 29.760960
+    longitude: 115.974797
+    altitude_m: 405.0
     heading_deg: 0.0
 
 map:
   satellite_texture_path: "data/satellite01.jpg"
-  bbox: [27.1800, 76.2094, 27.2204, 76.2588]
+  bbox: [29.702283, 115.970635, 29.774065, 115.996851]
 
 models:
   superpoint_engine: "data/engines/superpoint_fp16.engine"
