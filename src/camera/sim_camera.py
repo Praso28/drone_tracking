@@ -100,6 +100,9 @@ class SimCamera:
                 self.gt_longitude = lon
                 self.gt_altitude_m = 100.0
                 self.gt_heading_deg = heading
+                self.imu_ax = 0.0
+                self.imu_ay = 0.0
+                self.imu_az = 9.81
         
         telemetry = SyntheticTelemetry(lat, lon, heading)
         return True, frame, telemetry
