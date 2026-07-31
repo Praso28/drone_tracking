@@ -66,3 +66,7 @@ def test_pixel_displacement_to_geopose():
 
     assert abs(dist - expected_dist) < 0.05
     assert pose["heading_deg"] == 15.0
+    # dy_px=-10 corresponds to North movement -> latitude increases
+    assert pose["latitude"] > ref_lat
+    # dx_px=20 corresponds to West camera displacement -> longitude decreases
+    assert pose["longitude"] < ref_lon

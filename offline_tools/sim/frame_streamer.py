@@ -6,9 +6,8 @@ and streams packets over ZMQ to the Jetson Orin Nano edge node.
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
 import time
+import math
 import cv2
 import zmq
 import yaml
@@ -28,10 +27,10 @@ def run_frame_streamer(config_path: str = "config/sim.yaml", port: int = 5555):
         cfg = yaml.safe_load(f)
 
     map_cfg = cfg.get("map", {})
-    bbox = map_cfg.get("bbox", [27.1800, 76.2100, 27.2200, 76.2600])
+    bbox = map_cfg.get("bbox", [29.702283, 115.970635, 29.774065, 115.996851])
 
     camera = SimCamera(
-        texture_path=map_cfg.get("satellite_texture_path", "data/ajabgarh_sat.png"),
+        texture_path=map_cfg.get("satellite_texture_path", "data/satellite01.jpg"),
         bbox=tuple(bbox),
         width=640,
         height=480,
@@ -44,10 +43,10 @@ def run_frame_streamer(config_path: str = "config/sim.yaml", port: int = 5555):
     logger.info(f"Started ZMQ Frame & Telemetry Streamer on tcp://0.0.0.0:{port}")
 
     waypoints = [
-        (27.2000, 76.2350),
-        (27.2050, 76.2350),
-        (27.2050, 76.2400),
-        (27.2000, 76.2400)
+        (29.760960, 115.974797),
+        (29.765000, 115.974797),
+        (29.765000, 115.980000),
+        (29.760960, 115.980000)
     ]
 
     frame_id = 0
@@ -83,7 +82,7 @@ def run_frame_streamer(config_path: str = "config/sim.yaml", port: int = 5555):
             if not success:
                 continue
 
-            # Generate synthetic IMU readings (gravity + small vibration noise)
+            # Generate synthetic IMU readings
             imu_ax = float(np.random.normal(0.0, 0.05))
             imu_ay = float(np.random.normal(0.0, 0.05))
             imu_az = float(9.81 + np.random.normal(0.0, 0.05))
@@ -123,7 +122,6 @@ def run_frame_streamer(config_path: str = "config/sim.yaml", port: int = 5555):
 
 
 if __name__ == "__main__":
-    import math
     parser = argparse.ArgumentParser(description="Stream video frames and telemetry over ZMQ.")
     parser.add_argument("--config", type=str, default="config/sim.yaml", help="Path to config file")
     parser.add_argument("--port", type=int, default=5555, help="ZMQ port to publish on")

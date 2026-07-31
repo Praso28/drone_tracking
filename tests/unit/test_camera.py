@@ -9,8 +9,9 @@ from src.camera.sim_camera import SimCamera
 
 def test_sim_camera_read():
     cam = SimCamera(width=320, height=240, fps=100)
-    success, frame = cam.read()
+    success, frame, telemetry = cam.read()
     assert success is True
     assert frame is not None
     assert frame.shape == (240, 320, 3)
+    assert telemetry is not None
     cam.release()

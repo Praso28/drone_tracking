@@ -28,11 +28,20 @@ def test_pose_smoother_outlier_rejection():
     assert "Outlier rejected" in res_outlier["reason"]
 
 
-def test_simple_ekf_fusion():
+def test_simple_ekf_fusion_cold_start():
     ekf = SimpleEKFFusion(init_lat=27.2000, init_lon=76.2350)
-    fix = {"latitude": 27.2010, "longitude": 76.2360, "heading_deg": 10.0}
-    updated = ekf.update_visual_fix(fix)
+    fix1 = {"latitude": 27.2010, "longitude": 76.2360, "heading_deg": 10.0}
+    
+    # Cold-start snap: ekf should snap instantly to fix1
+    updated1 = ekf.update_visual_fix(fix1)
+    assert updated1["latitude"] == 27.2010
+    assert updated1["longitude"] == 76.2360
+    assert updated1["heading_deg"] == 10.0
 
-    assert 27.2000 <= updated["latitude"] <= 27.2010
-    assert 76.2350 <= updated["longitude"] <= 76.2360
-    assert updated["heading_deg"] == 10.0
+    # Warm update: blending alpha=0.9
+    fix2 = {"latitude": 27.2020, "longitude": 76.2370, "heading_deg": 20.0}
+    updated2 = ekf.update_visual_fix(fix2)
+    # lat = 0.1 * 27.2010 + 0.9 * 27.2020 = 27.2019
+    assert abs(updated2["latitude"] - 27.2019) < 1e-6
+    assert abs(updated2["longitude"] - 76.2369) < 1e-6
+    assert updated2["heading_deg"] == 20.0

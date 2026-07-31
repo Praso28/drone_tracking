@@ -42,7 +42,10 @@ data/*.tif
 data/*.tiff
 data/*.npy
 data/*.index
+data/*.faiss
 data/*.sqlite
+data/*.csv
+data/*.json
 data/tiles/
 data/engines/*.onnx
 data/engines/*.engine

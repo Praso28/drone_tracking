@@ -57,7 +57,9 @@ class GPSDeniedPipeline:
         )
         self.ekf = SimpleEKFFusion(self.start_pose["latitude"], self.start_pose["longitude"])
         self.smoother = PoseSmoother(max_distance_m=3000.0)
-        self.phase_controller = NavigationPhaseController(anchor_inliers_thresh=100, tracking_min_inliers=30)
+        anchor_thresh = 100 if self.sp_engine.ort_session is not None else 15
+        tracking_thresh = 30 if self.sp_engine.ort_session is not None else 10
+        self.phase_controller = NavigationPhaseController(anchor_inliers_thresh=anchor_thresh, tracking_min_inliers=tracking_thresh)
         self.mavlink = MAVLinkBridge(
             connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"),
             origin_lat=self.start_pose["latitude"],
