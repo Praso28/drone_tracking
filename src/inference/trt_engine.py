@@ -59,17 +59,11 @@ def decode_superpoint(
 
     keypoints_240 = np.stack([xs, ys], axis=1).astype(np.float32)  # (N, 2) -> (x, y)
 
-    # 3. Sample 256-dim descriptors from desc map (1, 256, H_c, W_c)
-    desc_map = desc[0]  # (256, H_c, W_c)
-    C_dim = desc_map.shape[0]
-    descriptors = np.zeros((len(keypoints_240), C_dim), dtype=np.float32)
-
-    for i in range(len(keypoints_240)):
-        kx = float(keypoints_240[i][0])
-        ky = float(keypoints_240[i][1])
-        gx = int(clamp(kx * (W_c / 320.0), 0, W_c - 1))
-        gy = int(clamp(ky * (H_c / 240.0), 0, H_c - 1))
-        descriptors[i] = desc_map[:, gy, gx]
+    # 3. Fast Vectorized 256-dim descriptor sampling from desc map
+    desc_trans = desc[0].transpose(1, 2, 0)  # (H_c, W_c, 256)
+    gxs = np.clip(np.round(keypoints_240[:, 0] * (W_c / 320.0)).astype(int), 0, W_c - 1)
+    gys = np.clip(np.round(keypoints_240[:, 1] * (H_c / 240.0)).astype(int), 0, H_c - 1)
+    descriptors = desc_trans[gys, gxs]  # (N, 256)
 
     # L2 normalization
     norms = np.linalg.norm(descriptors, axis=1, keepdims=True)
