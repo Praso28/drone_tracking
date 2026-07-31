@@ -82,7 +82,7 @@ class SimCamera:
             img[:, :] = (40, 120, 40)
             return img
 
-    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
+    def read(self) -> Tuple[bool, Optional[np.ndarray], Any]:
         """Fallback automated path generator for standalone testing."""
         time.sleep(1.0 / self.fps)
         self.frame_count += 1
@@ -91,7 +91,17 @@ class SimCamera:
         lon = self.min_lon + (self.max_lon - self.min_lon) * (0.5 + 0.3 * np.cos(t))
         heading = (self.frame_count * 2.0) % 360.0
         frame = self.get_frame_at_pose(lat, lon, 100.0, heading)
-        return True, frame
+        
+        # Construct synthetic telemetry for logging and CEP metrics
+        class SyntheticTelemetry:
+            def __init__(self, lat, lon, heading):
+                self.gt_latitude = lat
+                self.gt_longitude = lon
+                self.gt_altitude_m = 100.0
+                self.gt_heading_deg = heading
+        
+        telemetry = SyntheticTelemetry(lat, lon, heading)
+        return True, frame, telemetry
 
     def release(self):
         """Releases camera resources."""

@@ -79,8 +79,7 @@ class GPSDeniedPipeline:
         if self.mode == "zmq":
             success, frame, telemetry = self.camera.read()
         else:
-            success, frame = self.camera.read()
-            telemetry = None
+            success, frame, telemetry = self.camera.read()
 
         if not success or frame is None:
             return {"status": "error", "message": "Frame acquisition failed"}
