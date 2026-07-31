@@ -95,6 +95,7 @@ class SimCamera:
         # Construct synthetic telemetry for logging and CEP metrics
         class SyntheticTelemetry:
             def __init__(self, lat, lon, heading):
+                self.timestamp = time.time()
                 self.gt_latitude = lat
                 self.gt_longitude = lon
                 self.gt_altitude_m = 100.0
