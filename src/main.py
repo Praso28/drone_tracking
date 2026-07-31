@@ -67,6 +67,12 @@ class GPSDeniedPipeline:
         self.anchor_lon = self.start_pose["longitude"]
         self.last_timestamp = None
 
+        # Initialize telemetry CSV logging
+        os.makedirs("data", exist_ok=True)
+        self.csv_log = open("data/flight_log.csv", "w")
+        self.csv_log.write("step,pred_lat,pred_lon,gt_lat,gt_lon,inliers,phase\n")
+        self.step_counter = 0
+
     def run_step(self) -> Dict[str, Any]:
         """Executes a single step of the intelligent multi-phase edge navigation loop."""
         if self.mode == "zmq":
@@ -197,6 +203,11 @@ class GPSDeniedPipeline:
         gt_lat = telemetry.gt_latitude if telemetry else None
         gt_lon = telemetry.gt_longitude if telemetry else None
 
+        self.step_counter += 1
+        if gt_lat is not None and gt_lon is not None:
+            self.csv_log.write(f"{self.step_counter},{final_pose['latitude']:.7f},{final_pose['longitude']:.7f},{gt_lat:.7f},{gt_lon:.7f},{inliers},{phase_res['phase']}\n")
+            self.csv_log.flush()
+
         return {
             "status": "success",
             "state": phase_res["phase"],
@@ -227,6 +238,11 @@ class GPSDeniedPipeline:
         if hasattr(self.mavlink, "close"):
             try:
                 self.mavlink.close()
+            except Exception:
+                pass
+        if hasattr(self, "csv_log") and self.csv_log is not None:
+            try:
+                self.csv_log.close()
             except Exception:
                 pass
         logger.info("Pipeline resources released cleanly.")
