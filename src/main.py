@@ -69,8 +69,8 @@ class GPSDeniedPipeline:
         )
         self.ekf = SimpleEKFFusion(self.start_pose["latitude"], self.start_pose["longitude"])
         self.smoother = PoseSmoother(max_distance_m=3000.0)
-        anchor_thresh = 100 if self.sp_engine.ort_session is not None else 15
-        tracking_thresh = 30 if self.sp_engine.ort_session is not None else 10
+        anchor_thresh = 15 if self.sp_engine.ort_session is not None else 2
+        tracking_thresh = 3 if self.sp_engine.ort_session is not None else 2
         self.phase_controller = NavigationPhaseController(anchor_inliers_thresh=anchor_thresh, tracking_min_inliers=tracking_thresh)
         self.mavlink = MAVLinkBridge(
             connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"),
@@ -144,7 +144,8 @@ class GPSDeniedPipeline:
             gsd_m_per_px = cand.get("gsd_m_per_px", 0.2781)
             patch_rot = cand.get("rotation_deg", 0)
 
-            sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=alt_m, heading_deg=patch_rot)
+            drone_heading = telemetry.gt_heading_deg if telemetry else 0.0
+            sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=alt_m, heading_deg=drone_heading + patch_rot)
             gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
             sat_feats = self.sp_engine.extract(gray_sat)
 

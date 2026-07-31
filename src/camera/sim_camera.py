@@ -89,8 +89,8 @@ class SimCamera:
         t = self.frame_count * 0.05
         # Orbit such that at t=0, the drone is exactly at the anchor
         radius_deg = 0.003  # ~330 meters radius
-        center_lat = 29.760960
-        center_lon = 115.974797 - radius_deg
+        center_lat = (self.min_lat + self.max_lat) / 2.0
+        center_lon = (self.min_lon + self.max_lon) / 2.0 - radius_deg
         lat = center_lat + radius_deg * np.sin(t)
         lon = center_lon + radius_deg * np.cos(t)
         heading = (self.frame_count * 2.0) % 360.0

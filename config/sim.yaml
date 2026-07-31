@@ -6,14 +6,14 @@ sim:
   stream_fps: 30
 
 map:
-  satellite_texture_path: "data/ajabgarh_sat.png"
+  satellite_texture_path: "data/satellite01.jpg"
   db_path: "data/map_db.sqlite"
   descriptors_path: "data/vlad_descriptors.npy"
   tile_dir: "data/tiles"
   zoom_level: 18
   patch_size_px: 256
   rotations: [0, 90, 180, 270]
-  bbox: [27.1800, 76.2100, 27.2200, 76.2600]
+  bbox: [29.702283, 115.970635, 29.774065, 115.996851]
 
 indexer:
   index_type: "IVFPQ"
