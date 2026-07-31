@@ -52,7 +52,7 @@ class NavigationPhaseController:
                 self.anchored = True
                 self.phase = "HIGH_CONFIDENCE_TRACKING"
                 self.last_valid_fix_time = now
-                logger.info(f"🎯 PHASE 1 COMPLETE: Map Anchored with {inliers} inliers! Transitioning to HIGH_CONFIDENCE_TRACKING.")
+                logger.info(f"PHASE 1 COMPLETE: Map Anchored with {inliers} inliers. Transitioning to HIGH_CONFIDENCE_TRACKING.")
                 return {
                     "phase": "HIGH_CONFIDENCE_TRACKING",
                     "action": "GLOBAL_ANCHOR_SUCCESS",
@@ -61,7 +61,7 @@ class NavigationPhaseController:
                     "confidence": min(1.0, inliers / 300.0)
                 }
             else:
-                logger.info(f"🔍 PHASE 1: Searching global map... (Inliers: {inliers} < {self.anchor_inliers_thresh})")
+                logger.info(f"PHASE 1: Searching global map... (Inliers: {inliers} < {self.anchor_inliers_thresh})")
                 return {
                     "phase": "UNANCHORED_ACQUISITION",
                     "action": "SEARCHING_GLOBAL_MAP",
@@ -80,7 +80,7 @@ class NavigationPhaseController:
             self.dead_reckoning_start = None
 
             if is_refix:
-                logger.info(f"🔄 PHASE 4 (GLOBAL_REFIX): High-confidence visual match ({inliers} inliers) re-anchored trajectory!")
+                logger.info(f"PHASE 4 (GLOBAL_REFIX): High-confidence visual match ({inliers} inliers) re-anchored trajectory.")
                 action = "GLOBAL_REFIX_REANCHOR"
             else:
                 action = "VISUAL_TRACKING"
@@ -101,7 +101,7 @@ class NavigationPhaseController:
 
         if dead_rec_duration <= self.max_dead_reckoning_sec:
             self.phase = "IMU_DEAD_RECKONING"
-            logger.warning(f"⚠️ PHASE 3 (IMU_DEAD_RECKONING): Low inliers ({inliers}). Relying on IMU propagation ({dead_rec_duration:.1f}s).")
+            logger.warning(f"PHASE 3 (IMU_DEAD_RECKONING): Low inliers ({inliers}). Relying on IMU propagation ({dead_rec_duration:.1f}s).")
             return {
                 "phase": "IMU_DEAD_RECKONING",
                 "action": "IMU_PROPAGATION",
@@ -112,7 +112,7 @@ class NavigationPhaseController:
 
         # PHASE 5: EMERGENCY_HOLD (MAVLink Fail-Safe)
         self.phase = "EMERGENCY_HOLD"
-        logger.error(f"🚨 PHASE 5 (EMERGENCY_HOLD): Visual tracking lost for {dead_rec_duration:.1f}s! Triggering MAVLink Loiter/RTL.")
+        logger.error(f"PHASE 5 (EMERGENCY_HOLD): Visual tracking lost for {dead_rec_duration:.1f}s. Triggering MAVLink Loiter/RTL.")
         return {
             "phase": "EMERGENCY_HOLD",
             "action": "MAVLINK_EMERGENCY_LOITER",

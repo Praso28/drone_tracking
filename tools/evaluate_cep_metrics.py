@@ -53,7 +53,7 @@ class CEPEvaluator:
         """Prints a clean, professional CEP accuracy summary table."""
         m = self.compute_metrics()
         print("\n" + "=" * 65)
-        print("🎯 GPS-DENIED VISUAL LOCALIZATION POSITION ACCURACY REPORT")
+        print("GPS-DENIED VISUAL LOCALIZATION POSITION ACCURACY REPORT")
         print("=" * 65)
         print(f" Total Flight Samples Evaluated:  {m['samples']}")
         print(f" CEP-50 (50% Horizontal Error):   {m['cep_50_m']:.2f} meters")
