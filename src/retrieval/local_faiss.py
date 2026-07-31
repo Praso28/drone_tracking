@@ -20,8 +20,8 @@ class LocalFaissRetriever:
 
     def __init__(
         self,
-        index_path: str = "data/ajabgarh_ivfpq.index",
-        db_path: str = "data/georef.sqlite",
+        index_path: str = "data/map_index.faiss",
+        db_path: str = "data/map_db.sqlite",
         top_k: int = 5
     ):
         self.index_path = index_path

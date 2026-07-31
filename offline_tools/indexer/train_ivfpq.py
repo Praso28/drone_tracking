@@ -73,7 +73,7 @@ def train_and_save_ivfpq_index(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train compressed FAISS IVFPQ index.")
     parser.add_argument("--descriptors", type=str, default="data/vlad_descriptors.npy", help="Input descriptors .npy")
-    parser.add_argument("--output", type=str, default="data/ajabgarh_ivfpq.index", help="Output .index file")
+    parser.add_argument("--output", type=str, default="data/map_index.faiss", help="Output .faiss index file")
     parser.add_argument("--nlist", type=int, default=100, help="Number of Voronoi cells")
     parser.add_argument("--m", type=int, default=16, help="Number of sub-quantizers")
     parser.add_argument("--nbits", type=int, default=8, help="Bits per sub-quantizer")

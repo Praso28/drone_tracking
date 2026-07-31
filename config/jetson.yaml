@@ -19,8 +19,8 @@ models:
   match_threshold: 0.2
 
 retrieval:
-  index_path: "data/ajabgarh_ivfpq.index"
-  db_path: "data/georef.sqlite"
+  index_path: "data/map_index.faiss"
+  db_path: "data/map_db.sqlite"
   top_k: 5
   nprobe: 10
 

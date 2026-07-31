@@ -1,8 +1,7 @@
 # UAV-VisLoc Professional Dataset Configuration
 dataset:
   sequence_id: "01"
-  dataset_root: "/mnt/c/Users/hs901/Downloads/UAV_VisLoc_dataset"
-  win_dataset_root: "C:\\Users\\hs901\\Downloads\\UAV_VisLoc_dataset"
+  dataset_root: "${UAV_VISLOC_ROOT:-data/uav_visloc}"
   patch_size_px: 256
   stride_px: 512
   descriptor_dim: 256
@@ -10,10 +9,9 @@ dataset:
 streamer:
   host: "0.0.0.0"
   port: 5555
-  fps: 10
+  fps: 30
   loop: true
 
 edge_node:
   pc_host: "10.1.1.13"
-  wsl_host: "172.24.251.225"
   steps: 50

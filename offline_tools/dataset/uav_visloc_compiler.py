@@ -54,8 +54,8 @@ def extract_descriptor(patch_arr: np.ndarray, dim: int = 256) -> np.ndarray:
 
 def compile_uav_visloc(
     sequence_id: str = "01",
-    dataset_root: str = "/mnt/c/Users/hs901/Downloads/UAV_VisLoc_dataset",
-    output_db: str = "data/georef.sqlite",
+    dataset_root: str = os.environ.get("UAV_VISLOC_ROOT", "data/uav_visloc"),
+    output_db: str = "data/map_db.sqlite",
     output_desc: str = "data/vlad_descriptors.npy",
     patch_size_px: int = 256,
     stride_px: int = 256

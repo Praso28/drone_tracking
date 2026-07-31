@@ -51,8 +51,8 @@ class GPSDeniedPipeline:
         self.sp_engine = SuperPointEngine(descriptor_dim=256)
         self.matcher = LightGlueMatcher()
         self.retriever = LocalFaissRetriever(
-            index_path=self.cfg.get("retrieval", {}).get("index_path", "data/ajabgarh_ivfpq.index"),
-            db_path=self.cfg.get("retrieval", {}).get("db_path", "data/georef.sqlite")
+            index_path=self.cfg.get("retrieval", {}).get("index_path", "data/map_index.faiss"),
+            db_path=self.cfg.get("retrieval", {}).get("db_path", "data/map_db.sqlite")
         )
         self.ekf = SimpleEKFFusion(self.start_pose["latitude"], self.start_pose["longitude"])
         self.smoother = PoseSmoother(max_distance_m=3000.0)

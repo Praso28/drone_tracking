@@ -7,7 +7,7 @@ sim:
 
 map:
   satellite_texture_path: "data/ajabgarh_sat.png"
-  db_path: "data/georef.sqlite"
+  db_path: "data/map_db.sqlite"
   descriptors_path: "data/vlad_descriptors.npy"
   tile_dir: "data/tiles"
   zoom_level: 18
