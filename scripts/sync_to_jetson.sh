@@ -23,13 +23,13 @@ rsync -avz --delete --no-perms \
     src config shared scripts README.md LICENSE \
     "${JETSON_USER}@${JETSON_IP}:~/${TARGET_DIR}/"
 
-# 2. Transfer compiled satellite map index & SQLite georef database if present locally
-echo "--- Transferring Map Index & SQLite Georef Database ---"
-if [ -f "data/map_index.faiss" ] && [ -f "data/map_db.sqlite" ]; then
-    scp data/map_index.faiss data/map_db.sqlite "${JETSON_USER}@${JETSON_IP}:~/${TARGET_DIR}/data/"
-    echo "[+] Successfully transferred map_index.faiss and map_db.sqlite."
+# 2. Transfer compiled satellite map index, SQLite georef database, and satellite texture if present locally
+echo "--- Transferring Map Index, SQLite Georef Database & Satellite Texture ---"
+if [ -f "data/map_index.faiss" ] && [ -f "data/map_db.sqlite" ] && [ -f "data/satellite01.jpg" ]; then
+    scp data/map_index.faiss data/map_db.sqlite data/satellite01.jpg "${JETSON_USER}@${JETSON_IP}:~/${TARGET_DIR}/data/"
+    echo "[+] Successfully transferred map database and satellite texture."
 else
-    echo "[!] Warning: data/map_index.faiss or data/map_db.sqlite missing locally."
+    echo "[!] Warning: data/map_index.faiss, data/map_db.sqlite, or data/satellite01.jpg missing locally."
     echo "[!] Run 'bash scripts/build_map.sh' to compile map database before flying."
 fi
 
