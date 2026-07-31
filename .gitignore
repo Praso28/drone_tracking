@@ -47,6 +47,7 @@ data/*.sqlite
 data/*.csv
 data/*.json
 data/tiles/
+data/UAV_VisLoc_dataset/
 data/engines/*.onnx
 data/engines/*.engine
 results/
