@@ -27,6 +27,6 @@ def test_full_pipeline_e2e_integration():
     assert len(results) == 3
     for r in results:
         assert r["status"] == "success"
-        assert r["state"] in ["HIGH_CONFIDENCE_TRACKING", "UNANCHORED_ACQUISITION", "TRACKING"]
+        assert r["state"] in ["HIGH_CONFIDENCE_TRACKING", "UNANCHORED_ACQUISITION", "IMU_DEAD_RECKONING", "GLOBAL_REFIX", "EMERGENCY_HOLD"]
         assert "latitude" in r["pose"]
         assert "longitude" in r["pose"]

@@ -18,7 +18,7 @@ import numpy as np
 from typing import Dict, Any
 
 from shared.logging_cfg import setup_logger
-from shared.geo.pose_math import homography_to_translation, compute_geopose
+from shared.geo.pose_math import homography_to_translation, compute_geopose, ransac_pose_vote
 from src.camera.sim_camera import SimCamera
 from src.camera.zmq_receiver import ZMQReceiver
 from src.inference.trt_engine import SuperPointEngine
@@ -57,7 +57,11 @@ class GPSDeniedPipeline:
         self.ekf = SimpleEKFFusion(self.start_pose["latitude"], self.start_pose["longitude"])
         self.smoother = PoseSmoother(max_distance_m=3000.0)
         self.phase_controller = NavigationPhaseController(anchor_inliers_thresh=100, tracking_min_inliers=30)
-        self.mavlink = MAVLinkBridge(connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"))
+        self.mavlink = MAVLinkBridge(
+            connection_str=self.cfg.get("comms", {}).get("mavlink_connection", "udp:127.0.0.1:14540"),
+            origin_lat=self.start_pose["latitude"],
+            origin_lon=self.start_pose["longitude"]
+        )
         
         self.anchor_lat = self.start_pose["latitude"]
         self.anchor_lon = self.start_pose["longitude"]
@@ -108,22 +112,50 @@ class GPSDeniedPipeline:
         query_vec = np.mean(live_feats["descriptors"], axis=0)
         candidates = self.retriever.search(query_vec, spatial_prior=spatial_prior, radius_km=8.0)
 
-        top_cand = candidates[0] if candidates else {}
-        cand_lat = top_cand.get("center_lat", self.anchor_lat)
-        cand_lon = top_cand.get("center_lon", self.anchor_lon)
-        gsd_m_per_px = top_cand.get("gsd_m_per_px", 0.2781)
-        patch_rot = top_cand.get("rotation_deg", 0)
+        # 4. Multi-candidate RANSAC voting consensus evaluation
+        evaluated_candidates = []
+        for cand in candidates[:3]:
+            cand_lat = cand.get("center_lat", self.anchor_lat)
+            cand_lon = cand.get("center_lon", self.anchor_lon)
+            gsd_m_per_px = cand.get("gsd_m_per_px", 0.2781)
+            patch_rot = cand.get("rotation_deg", 0)
 
-        # 4. Lazy-crop candidate satellite map patch from disk with patch rotation
-        sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=alt_m, heading_deg=patch_rot)
-        gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
-        sat_feats = self.sp_engine.extract(gray_sat)
+            sat_patch_bgr = self.sat_sampler.get_frame_at_pose(cand_lat, cand_lon, alt_m=alt_m, heading_deg=patch_rot)
+            gray_sat = np.mean(sat_patch_bgr, axis=2).astype(np.uint8) if sat_patch_bgr.ndim == 3 else sat_patch_bgr
+            sat_feats = self.sp_engine.extract(gray_sat)
 
-        # 5. Perform 2D Partial Affine cross-matching
-        inliers, M = self.matcher.match(live_feats, sat_feats)
+            inliers, M = self.matcher.match(live_feats, sat_feats)
+            dx_px, dy_px, yaw_deg = homography_to_translation(M, (frame.shape[1] / 2.0, frame.shape[0] / 2.0))
 
-        # 6. Convert Affine transformation to translation & WGS84 geopose with patch rotation un-winding
-        dx_px, dy_px, yaw_deg = homography_to_translation(M, (frame.shape[1] / 2.0, frame.shape[0] / 2.0))
+            evaluated_candidates.append({
+                "cand": cand,
+                "inliers": inliers,
+                "cand_lat": cand_lat,
+                "cand_lon": cand_lon,
+                "gsd_m_per_px": gsd_m_per_px,
+                "patch_rot": patch_rot,
+                "dx_px": dx_px,
+                "dy_px": dy_px,
+                "yaw_deg": yaw_deg
+            })
+
+        vote_res = ransac_pose_vote(evaluated_candidates, inlier_threshold=15)
+        if vote_res.get("valid"):
+            best = vote_res["best_candidate"]
+        else:
+            best = evaluated_candidates[0] if evaluated_candidates else {
+                "inliers": 0, "cand_lat": self.anchor_lat, "cand_lon": self.anchor_lon,
+                "gsd_m_per_px": 0.2781, "patch_rot": 0, "dx_px": 0.0, "dy_px": 0.0, "yaw_deg": 0.0
+            }
+
+        inliers = best["inliers"]
+        cand_lat = best["cand_lat"]
+        cand_lon = best["cand_lon"]
+        gsd_m_per_px = best["gsd_m_per_px"]
+        patch_rot = best["patch_rot"]
+        dx_px = best["dx_px"]
+        dy_px = best["dy_px"]
+        yaw_deg = best["yaw_deg"]
         fov_base_px = 512.0
         crop_size = int(fov_base_px * (alt_m / 100.0))
         scale_factor = crop_size / 640.0
