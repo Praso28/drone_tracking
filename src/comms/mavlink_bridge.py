@@ -15,8 +15,15 @@ logger = setup_logger("mavlink_bridge")
 class MAVLinkBridge:
     """Interface to flight controller via PyMAVLink / UDP socket."""
 
-    def __init__(self, connection_str: str = "udp:127.0.0.1:14540"):
+    def __init__(
+        self,
+        connection_str: str = "udp:127.0.0.1:14540",
+        origin_lat: float = 27.2000,
+        origin_lon: float = 76.2350
+    ):
         self.connection_str = connection_str
+        self.origin_lat = origin_lat
+        self.origin_lon = origin_lon
         self.mav = None
         self.udp_sock = None
         self.target_ip = "127.0.0.1"
@@ -31,7 +38,7 @@ class MAVLinkBridge:
         try:
             from pymavlink import mavutil
             self.mav = mavutil.mavlink_connection(connection_str, source_system=1, source_component=191)
-            logger.info(f"Initialized PyMAVLink connection endpoint: {connection_str}")
+            logger.info(f"Initialized PyMAVLink connection endpoint: {connection_str} (Origin: {self.origin_lat}, {self.origin_lon})")
         except Exception as e:
             logger.warning(f"PyMAVLink init failed ({e}). Initializing raw UDP socket fallback to {self.target_ip}:{self.target_port}.")
             self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -55,8 +62,8 @@ class MAVLinkBridge:
         if self.mav is not None:
             try:
                 # Convert lat/lon to local ENU approximation relative to origin
-                x_m = float((lat - 27.2000) * 111000.0)
-                y_m = float((lon - 76.2350) * 111000.0 * np.cos(np.radians(27.2000)))
+                x_m = float((lat - self.origin_lat) * 111000.0)
+                y_m = float((lon - self.origin_lon) * 111000.0 * np.cos(np.radians(self.origin_lat)))
                 z_m = float(-alt_m)
 
                 cov = [covariance_std_m**2] + [0.0] * 20

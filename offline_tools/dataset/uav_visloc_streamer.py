@@ -25,7 +25,7 @@ logger = setup_logger("uav_visloc_streamer")
 
 def run_uav_visloc_streamer(
     sequence_id: str = "01",
-    dataset_root: str = "/mnt/c/Users/hs901/Downloads/UAV_VisLoc_dataset",
+    dataset_root: str = os.environ.get("UAV_VISLOC_ROOT", "data/uav_visloc"),
     port: int = 5555,
     fps: float = 30.0,
     startup_delay: float = 3.0,
@@ -154,7 +154,7 @@ def run_uav_visloc_streamer(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Stream real UAV-VisLoc drone video and authentic telemetry over ZMQ.")
     parser.add_argument("--sequence", type=str, default="01", help="Dataset sequence ID (01 - 11)")
-    parser.add_argument("--dataset-root", type=str, default="/mnt/c/Users/hs901/Downloads/UAV_VisLoc_dataset")
+    parser.add_argument("--dataset-root", type=str, default=os.environ.get("UAV_VISLOC_ROOT", "data/uav_visloc"), help="Path to UAV-VisLoc dataset directory")
     parser.add_argument("--port", type=int, default=5555, help="ZMQ publishing port")
     parser.add_argument("--fps", type=float, default=30.0, help="Stream FPS rate")
     parser.add_argument("--startup-delay", type=float, default=3.0, help="Startup delay seconds before publishing")

@@ -105,8 +105,8 @@ class LocalFaissRetriever:
             item = {
                 "descriptor_index": int(idx),
                 "distance": float(dist),
-                "center_lat": 29.760960,
-                "center_lon": 115.974797,
+                "center_lat": spatial_prior["latitude"] if spatial_prior else 29.760960,
+                "center_lon": spatial_prior["longitude"] if spatial_prior else 115.974797,
                 "rotation_deg": 0,
                 "gsd_m_per_px": 0.2781
             }
