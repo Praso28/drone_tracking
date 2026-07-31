@@ -94,8 +94,46 @@ class SuperPointEngine:
         self.max_keypoints = max_keypoints
         self.descriptor_dim = descriptor_dim
         self.ort_session = None
+        
+        # TRT state
+        self.trt_context = None
+        self.trt_engine = None
+        self.d_input = None
+        self.d_semi = None
+        self.d_desc = None
+        self.h_input = None
+        self.h_semi = None
+        self.h_desc = None
+        self.stream = None
 
-        if os.path.exists(onnx_path):
+        if os.path.exists(engine_path):
+            try:
+                import tensorrt as trt
+                import pycuda.driver as cuda
+                import pycuda.autoinit
+                
+                TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+                with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
+                    self.trt_engine = runtime.deserialize_cuda_engine(f.read())
+                
+                self.trt_context = self.trt_engine.create_execution_context()
+                
+                # Allocate buffers (assuming fixed 1x1x240x320 input, 1x65x120x160 semi, 1x256x120x160 desc)
+                self.h_input = cuda.pagelocked_empty((1, 1, 240, 320), dtype=np.float32)
+                self.h_semi = cuda.pagelocked_empty((1, 65, 120, 160), dtype=np.float32)
+                self.h_desc = cuda.pagelocked_empty((1, 256, 120, 160), dtype=np.float32)
+                
+                self.d_input = cuda.mem_alloc(self.h_input.nbytes)
+                self.d_semi = cuda.mem_alloc(self.h_semi.nbytes)
+                self.d_desc = cuda.mem_alloc(self.h_desc.nbytes)
+                
+                self.stream = cuda.Stream()
+                logger.info(f"Loaded SuperPoint TensorRT engine from {engine_path}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize TensorRT session: {e}")
+                self.trt_context = None
+
+        if self.trt_context is None and os.path.exists(onnx_path):
             try:
                 import onnxruntime as ort
                 self.ort_session = ort.InferenceSession(onnx_path, providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
@@ -112,14 +150,62 @@ class SuperPointEngine:
 
         orig_H, orig_W = image_gray.shape[:2]
 
-        # 1. Run ONNX Runtime if session is loaded
+        img_resized = cv2.resize(image_gray, (320, 240)) if (orig_H != 240 or orig_W != 320) else image_gray
+        scale_x = float(orig_W) / 320.0
+        scale_y = float(orig_H) / 240.0
+
+        # 1. Run TensorRT if session is loaded
+        if self.trt_context is not None:
+            try:
+                import pycuda.driver as cuda
+                np.copyto(self.h_input, img_resized.astype(np.float32)[None, None, :, :] / 255.0)
+                cuda.memcpy_htod_async(self.d_input, self.h_input, self.stream)
+                
+                try:
+                    # TensorRT 8.5+ API (Required for TRT 10)
+                    self.trt_context.set_tensor_address("input", int(self.d_input))
+                    self.trt_context.set_tensor_address("semi", int(self.d_semi))
+                    self.trt_context.set_tensor_address("desc", int(self.d_desc))
+                    self.trt_context.execute_async_v3(stream_handle=self.stream.handle)
+                except AttributeError:
+                    # Fallback for older TensorRT versions
+                    self.trt_context.execute_async_v2(
+                        bindings=[int(self.d_input), int(self.d_semi), int(self.d_desc)],
+                        stream_handle=self.stream.handle
+                    )
+                
+                cuda.memcpy_dtoh_async(self.h_semi, self.d_semi, self.stream)
+                cuda.memcpy_dtoh_async(self.h_desc, self.d_desc, self.stream)
+                self.stream.synchronize()
+                
+                semi_tensor = self.h_semi
+                desc_tensor = self.h_desc
+                
+                keypoints_240, scores, descriptors = decode_superpoint(
+                    semi_tensor, desc_tensor, max_keypoints=self.max_keypoints, threshold=0.005
+                )
+
+                # Rescale keypoints back to original frame resolution
+                keypoints = keypoints_240.copy()
+                if len(keypoints) > 0:
+                    keypoints[:, 0] *= scale_x
+                    keypoints[:, 1] *= scale_y
+
+                # Adjust descriptors to target dimension if needed
+                if descriptors.ndim == 2 and descriptors.shape[1] < self.descriptor_dim:
+                    descriptors = np.pad(descriptors, ((0, 0), (0, self.descriptor_dim - descriptors.shape[1])))
+                elif descriptors.ndim == 2 and descriptors.shape[1] > self.descriptor_dim:
+                    descriptors = descriptors[:, :self.descriptor_dim]
+
+                return {"keypoints": keypoints, "scores": scores, "descriptors": descriptors}
+                
+            except Exception as e:
+                logger.warning(f"TensorRT extraction failed: {e}. Falling back.")
+
+        # 2. Run ONNX Runtime if session is loaded
         if self.ort_session is not None:
             try:
-                img_onnx = cv2.resize(image_gray, (320, 240)) if (orig_H != 240 or orig_W != 320) else image_gray
-                scale_x = float(orig_W) / 320.0
-                scale_y = float(orig_H) / 240.0
-
-                inp_tensor = img_onnx.astype(np.float32)[None, None, :, :] / 255.0
+                inp_tensor = img_resized.astype(np.float32)[None, None, :, :] / 255.0
                 inp_name = self.ort_session.get_inputs()[0].name
                 outs = self.ort_session.run(None, {inp_name: inp_tensor})
 

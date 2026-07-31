@@ -50,7 +50,12 @@ def audit_inference_subsystem() -> dict:
         feats1 = sp.extract(img1)
 
         inliers, M = matcher.match(feats0, feats1)
-        backend = "ONNX" if sp.ort_session is not None else "FAST/Gradient CPU Fallback"
+        if getattr(sp, "trt_context", None) is not None:
+            backend = "TensorRT FP16"
+        elif sp.ort_session is not None:
+            backend = "ONNX"
+        else:
+            backend = "FAST/Gradient CPU Fallback"
 
         return {
             "status": "PASS",

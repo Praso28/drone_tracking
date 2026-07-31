@@ -1,15 +1,11 @@
 """
-UAV-VisLoc Professional Telemetry & Real Video Streamer.
-Reads real high-resolution drone photographs and actual flight telemetry (center Lat/Lon,
-flying height, roll/pitch/yaw angles) from the UAV-VisLoc dataset and streams packets
-over ZMQ PUB socket to the Jetson Orin Nano edge node at 30 Hz.
-Includes startup delay parameter to allow seamless synchronization with Jetson control loop launch.
+UAV-VisLoc Telemetry & Real Video Streamer.
+Reads real drone photos and flight telemetry (center Lat/Lon, flying height, roll/pitch/yaw)
+from the UAV-VisLoc dataset and streams packets over ZMQ to the Jetson edge node.
 """
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
 import time
 import cv2
 import zmq
@@ -25,10 +21,9 @@ logger = setup_logger("uav_visloc_streamer")
 
 def run_uav_visloc_streamer(
     sequence_id: str = "01",
-    dataset_root: str = os.environ.get("UAV_VISLOC_ROOT", "data/uav_visloc"),
+    dataset_root: str = "data/UAV_VisLoc_dataset",
     port: int = 5555,
     fps: float = 30.0,
-    startup_delay: float = 3.0,
     loop: bool = True
 ):
     """Publishes real drone video frames and authentic flight telemetry over ZMQ PUB socket."""
@@ -42,7 +37,7 @@ def run_uav_visloc_streamer(
     # Read flight telemetry CSV
     telemetry_records = []
     with open(csv_path, "r") as f:
-        header = f.readline()  # header
+        header = f.readline()
         for line in f:
             parts = line.strip().split(",")
             if len(parts) >= 9:
@@ -58,17 +53,13 @@ def run_uav_visloc_streamer(
                     "phi1": float(parts[8])    # yaw / heading
                 })
 
-    logger.info(f"Loaded {len(telemetry_records)} real flight telemetry records from {csv_path}")
+    logger.info(f"Loaded {len(telemetry_records)} flight telemetry records from {csv_path}")
 
     # Bind ZMQ Socket
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind(f"tcp://0.0.0.0:{port}")
-    logger.info(f"Started Professional UAV-VisLoc Telemetry Streamer on tcp://0.0.0.0:{port}")
-
-    if startup_delay > 0:
-        logger.info(f"Pausing {startup_delay}s for Jetson Edge Node connection launch...")
-        time.sleep(startup_delay)
+    logger.info(f"Started UAV-VisLoc Telemetry Streamer on tcp://0.0.0.0:{port}")
 
     frame_id = 0
     record_idx = 0
@@ -86,7 +77,6 @@ def run_uav_visloc_streamer(
             frame_id += 1
             now = time.time()
 
-            # Load real drone photograph and resize to 640x480 for edge pipeline input
             frame_bgr = cv2.imread(img_path)
             if frame_bgr is None:
                 record_idx = (record_idx + 1) % len(telemetry_records)
@@ -99,13 +89,11 @@ def run_uav_visloc_streamer(
                 record_idx = (record_idx + 1) % len(telemetry_records)
                 continue
 
-            # Real telemetry attributes
             cur_lat = rec["lat"]
             cur_lon = rec["lon"]
             alt_m = rec["height"]
             heading_deg = rec["phi1"]
 
-            # Convert roll/pitch angles to synthetic IMU accelerations
             pitch_rad = np.radians(rec["omega"])
             roll_rad = np.radians(rec["kappa"])
             imu_ax = float(9.81 * np.sin(pitch_rad) + np.random.normal(0, 0.02))
@@ -119,7 +107,7 @@ def run_uav_visloc_streamer(
                 gt_longitude=cur_lon,
                 gt_altitude_m=alt_m,
                 gt_heading_deg=heading_deg,
-                gt_speed_mps=15.0,  # real drone flight speed ~15 m/s
+                gt_speed_mps=15.0,
                 imu_ax=imu_ax,
                 imu_ay=imu_ay,
                 imu_az=imu_az,
@@ -137,7 +125,7 @@ def run_uav_visloc_streamer(
             record_idx += 1
             if record_idx >= len(telemetry_records):
                 if loop:
-                    logger.info("Reached end of UAV-VisLoc sequence. Looping flight trajectory...")
+                    logger.info("Reached end of UAV-VisLoc sequence. Looping trajectory...")
                     record_idx = 0
                 else:
                     break
@@ -152,12 +140,11 @@ def run_uav_visloc_streamer(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Stream real UAV-VisLoc drone video and authentic telemetry over ZMQ.")
+    parser = argparse.ArgumentParser(description="Stream real UAV-VisLoc drone video and telemetry over ZMQ.")
     parser.add_argument("--sequence", type=str, default="01", help="Dataset sequence ID (01 - 11)")
-    parser.add_argument("--dataset-root", type=str, default=os.environ.get("UAV_VISLOC_ROOT", "data/uav_visloc"), help="Path to UAV-VisLoc dataset directory")
+    parser.add_argument("--dataset-root", type=str, default="data/UAV_VisLoc_dataset")
     parser.add_argument("--port", type=int, default=5555, help="ZMQ publishing port")
     parser.add_argument("--fps", type=float, default=30.0, help="Stream FPS rate")
-    parser.add_argument("--startup-delay", type=float, default=3.0, help="Startup delay seconds before publishing")
     args = parser.parse_args()
 
-    run_uav_visloc_streamer(sequence_id=args.sequence, dataset_root=args.dataset_root, port=args.port, fps=args.fps, startup_delay=args.startup_delay)
+    run_uav_visloc_streamer(sequence_id=args.sequence, dataset_root=args.dataset_root, port=args.port, fps=args.fps)

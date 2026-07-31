@@ -9,6 +9,7 @@ Executes Intelligent Multi-Phase Navigation State Machine:
 Includes candidate patch rotation un-winding into North/East geographic frame.
 """
 
+import sys
 import os
 import cv2
 import time
@@ -18,10 +19,16 @@ import yaml
 import numpy as np
 from typing import Dict, Any
 
+# Ensure repository root is in sys.path when invoked directly
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from shared.logging_cfg import setup_logger
 from shared.geo.pose_math import homography_to_translation, compute_geopose, ransac_pose_vote
 from src.camera.sim_camera import SimCamera
 from src.camera.zmq_receiver import ZMQReceiver
+from src.camera.dataset_camera import DatasetCamera
 from src.inference.trt_engine import SuperPointEngine
 from src.inference.lightglue_matcher import LightGlueMatcher
 from src.retrieval.local_faiss import LocalFaissRetriever
@@ -47,7 +54,12 @@ class GPSDeniedPipeline:
         bbox = tuple(map_cfg.get("bbox", [29.702283, 115.970635, 29.774065, 115.996851]))
 
         self.mode = mode
-        self.camera = ZMQReceiver(host=pc_host, port=5555) if mode == "zmq" else SimCamera(texture_path=texture_path, bbox=bbox)
+        if mode == "zmq":
+            self.camera = ZMQReceiver(host=pc_host, port=5555)
+        elif mode == "dataset":
+            self.camera = DatasetCamera(dataset_root="data/UAV_VisLoc_dataset", sequence_id="01")
+        else:
+            self.camera = SimCamera(texture_path=texture_path, bbox=bbox)
         self.sat_sampler = SimCamera(texture_path=texture_path, bbox=bbox)
         self.sp_engine = SuperPointEngine(descriptor_dim=256)
         self.matcher = LightGlueMatcher()
@@ -253,7 +265,7 @@ class GPSDeniedPipeline:
 def main():
     parser = argparse.ArgumentParser(description="Run Intelligent GPS-Denied navigation control loop.")
     parser.add_argument("--config", type=str, default="config/jetson.yaml", help="Path to config file")
-    parser.add_argument("--mode", type=str, default="sim", choices=["sim", "zmq"], help="Frame acquisition mode")
+    parser.add_argument("--mode", type=str, default="sim", choices=["sim", "zmq", "dataset"], help="Frame acquisition mode")
     parser.add_argument("--pc-host", type=str, default="10.1.1.13", help="PC host IP for ZMQ stream")
     parser.add_argument("--steps", type=int, default=10, help="Number of control loop steps to run")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose diagnostic logging")
