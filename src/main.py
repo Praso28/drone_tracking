@@ -113,8 +113,8 @@ class GPSDeniedPipeline:
         if len(live_feats["keypoints"]) == 0:
             return {"status": "warning", "message": "No keypoints detected"}
 
-        # 3. Intelligent Map Retrieval (Spatial Prior Search from anchored takeoff origin)
-        spatial_prior = {"latitude": self.anchor_lat, "longitude": self.anchor_lon}
+        # 3. Intelligent Map Retrieval (Spatial Prior Search from dynamic EKF state)
+        spatial_prior = {"latitude": self.ekf.lat, "longitude": self.ekf.lon}
         query_vec = np.mean(live_feats["descriptors"], axis=0)
         norm = np.linalg.norm(query_vec)
         if norm > 1e-6:
