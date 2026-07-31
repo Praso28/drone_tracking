@@ -29,7 +29,7 @@ def run_full_dataset_eval(steps: int = 20):
             res = pipeline.run_step()
             if res.get("status") == "success":
                 gt_str = f" | GT: ({res['gt_pose']['latitude']:.6f}, {res['gt_pose']['longitude']:.6f})" if res.get("gt_pose") else ""
-                print(f" Step {s+1:02d}/{steps:02d} [{res['phase']}] Pred: ({res['pose']['latitude']:.6f}, {res['pose']['longitude']:.6f}) Inliers: {res['inliers']}{gt_str}")
+                print(f" Step {s+1:02d}/{steps:02d} [{res['phase']}] Pred: ({res['pose']['latitude']:.6f}, {res['pose']['longitude']:.6f}) Inliers: {res['inliers']}{gt_str}", flush=True)
     finally:
         pipeline.close()
 
