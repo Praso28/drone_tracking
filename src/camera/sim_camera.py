@@ -10,7 +10,7 @@ import time
 import cv2
 import numpy as np
 from PIL import Image
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any
 
 Image.MAX_IMAGE_PIXELS = None
 
