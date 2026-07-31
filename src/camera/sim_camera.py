@@ -86,9 +86,12 @@ class SimCamera:
         """Fallback automated path generator for standalone testing."""
         time.sleep(1.0 / self.fps)
         self.frame_count += 1
-        t = self.frame_count * 0.02
-        lat = self.min_lat + (self.max_lat - self.min_lat) * (0.5 + 0.3 * np.sin(t))
-        lon = self.min_lon + (self.max_lon - self.min_lon) * (0.5 + 0.3 * np.cos(t))
+        t = self.frame_count * 0.05
+        # Orbit exactly around the true map starting anchor
+        center_lat, center_lon = 29.760960, 115.974797
+        radius_deg = 0.003  # ~330 meters radius
+        lat = center_lat + radius_deg * np.sin(t)
+        lon = center_lon + radius_deg * np.cos(t)
         heading = (self.frame_count * 2.0) % 360.0
         frame = self.get_frame_at_pose(lat, lon, 100.0, heading)
         

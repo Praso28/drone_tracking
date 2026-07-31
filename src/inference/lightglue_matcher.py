@@ -80,7 +80,7 @@ class LightGlueMatcher:
             dx = float(np.median(pts1[:, 0] - pts0[:, 0]))
             dy = float(np.median(pts1[:, 1] - pts0[:, 1]))
             M = np.array([[1.0, 0.0, dx], [0.0, 1.0, dy]], dtype=np.float32)
-            inliers = len(valid_matches)
+            inliers = 0  # CRITICAL FIX: If geometric RANSAC fails, inliers MUST be 0
         else:
             inliers = int(np.sum(mask)) if mask is not None else len(valid_matches)
 
